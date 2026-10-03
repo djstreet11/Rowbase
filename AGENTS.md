@@ -47,3 +47,7 @@ short: facts and rules only, no history.
 - 2026-10-03: psycopg needs `cur.execute(sql.replace('%','%%'), (), prepare=True)` to force one statement per call.
 - 2026-10-03: `sqlite3.Connection` takes no attributes → connect with `factory=` subclass. `sqlite:////abs` URLs → collapse leading slashes.
 - 2026-10-03: MySQL backslash escapes make `'a\'; DELETE …'` one literal — guard tests must be dialect-correct.
+- 2026-10-03: JS `new URL()` rejects `mysql://user@/db?socket=…` (empty host) — parse connection URLs manually; round-trip `options`.
+- 2026-10-03: Built-in browser pane resizes/scales unpredictably → verify UI by driving the DOM with `javascript_tool` and reading state; screenshots only for visuals.
+- 2026-10-03: Subagent frontend work passed `node --check` but had 2 functional bugs found only in-browser — always browser-test delegated UI.
+- 2026-10-03: Safety controls (Read-only toggle) must be visible without scrolling in forms.

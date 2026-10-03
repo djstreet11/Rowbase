@@ -68,7 +68,7 @@ autocomplete), confirmation for writes on RW connections, history drawer, copy J
 ### 2.6 Known gaps
 - No query cancel; no SSH tunnel; no TLS options for MySQL; no editing grid (only SQL on RW connections).
 - Client-side sort sorts only the current page; grid not virtualized (slow >5k rows).
-- No i18n yet (English only).
+- No i18n yet (English only). Layout not adapted to very narrow windows (<700px): fixed 270px sidebar.
 
 ## 3. Product vision
 
