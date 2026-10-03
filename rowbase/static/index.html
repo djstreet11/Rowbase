@@ -1,64 +1,103 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AWIS DB</title>
+<title>Rowbase</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header>
-  <div class="brand">AWIS <span>DB</span></div>
-  <select id="conn" title="Підключення з Config.php"></select>
-  <span class="ro">read-only</span>
+  <div class="brand">Row<span>base</span></div>
+  <select id="conn" title="Connection"></select>
+  <span class="ro" id="connBadge" hidden></span>
+  <button id="connBtn" title="Manage connections">Connections</button>
   <div class="spacer"></div>
-  <input id="refInput" class="mono" placeholder="Знайти об'єкт за Ref (UUID)…">
-  <button id="newConsole" title="Нова SQL-консоль">+ SQL</button>
-  <button id="historyBtn" title="Історія виконаних запитів">Історія</button>
-  <button id="refreshBtn" class="ghost" title="Скинути кеш схеми">⟳</button>
+  <button id="newConsole" title="New SQL console">+ SQL</button>
+  <button id="historyBtn" title="History of executed queries">History</button>
+  <button id="refreshBtn" class="ghost" title="Reset schema cache">⟳</button>
 </header>
 <aside>
   <div class="tools">
-    <input id="tableFilter" placeholder="Пошук таблиці  ( / )">
-    <label><input type="checkbox" id="hideService" checked> сховати службові (DEL_, _tmp, _…)</label>
+    <input id="tableFilter" placeholder="Filter tables  ( / )">
+    <select id="kindFilter" title="Show tables, views or both"><option value="all">tables + views</option><option value="table">tables only</option><option value="view">views only</option></select>
   </div>
   <div id="tableList"></div>
 </aside>
 <main>
   <div id="tabbar"></div>
   <div id="panes">
-    <div class="empty" id="welcome">Оберіть таблицю зліва, знайдіть об'єкт за Ref або відкрийте SQL-консоль (+ SQL).</div>
+    <div class="empty" id="welcome"></div>
   </div>
 </main>
 <footer><span id="st">—</span><span id="stWarn" class="warn"></span><span class="spacer"></span><span id="stConn"></span></footer>
 
 <div class="drawer" id="rowDrawer">
-  <div class="dh"><b id="rowTitle"></b><input id="rowFilter" placeholder="Пошук поля або значення"><button id="rowCopy">JSON</button><button class="ghost" id="rowClose">✕</button></div>
+  <div class="dh"><b id="rowTitle"></b><input id="rowFilter" placeholder="Search field or value"><button id="rowCopy">JSON</button><button class="ghost" id="rowClose">✕</button></div>
   <div class="db" id="rowBody"></div>
 </div>
 <div class="drawer" id="histDrawer">
-  <div class="dh"><b>Історія</b><input id="histFilter" placeholder="Пошук у запитах"><label class="chk"><input type="checkbox" id="histErrors"> лише помилки</label><button class="ghost" id="histClose">✕</button></div>
+  <div class="dh"><b>History</b><input id="histFilter" placeholder="Search queries"><label class="chk"><input type="checkbox" id="histErrors"> errors only</label><button class="ghost" id="histClose">✕</button></div>
   <div class="db" id="histBody"></div>
 </div>
+
+<dialog id="connDlg">
+  <div class="cm">
+    <div class="cm-side">
+      <div class="cm-h"><b>Connections</b><button id="cmNew" type="button">+ New</button></div>
+      <div id="cmList"></div>
+    </div>
+    <form id="cmForm" autocomplete="off" spellcheck="false">
+      <div class="cm-h"><b id="cmTitle">New connection</b><button class="ghost" type="button" id="cmX" title="Close (Esc)">✕</button></div>
+      <div class="cm-body">
+        <label class="fr"><span>Name</span><input id="cf_name" required></label>
+        <label class="fr"><span>Driver</span><select id="cf_driver"><option value="mysql">MySQL / MariaDB</option><option value="postgres">PostgreSQL</option><option value="sqlite">SQLite</option></select></label>
+        <label class="chk2"><input type="checkbox" id="cf_ro" checked> Read-only (refuse anything but SELECT-like statements)</label>
+        <div class="cm-warn" id="cmWarn" hidden>Read-only is off: INSERT / UPDATE / DELETE / DDL statements will be committed to this database.</div>
+        <label class="fr"><span>Paste URL</span><input id="cf_url" placeholder="mysql://user:pass@host:3306/db   postgres://…   sqlite:///path/to.db"></label>
+        <div class="net">
+          <div class="fr2"><label class="fr"><span>Host</span><input id="cf_host" placeholder="127.0.0.1"></label><label class="fr"><span>Port</span><input id="cf_port" type="number" min="1" max="65535"></label></div>
+          <label class="fr"><span>Socket</span><input id="cf_socket" placeholder="optional, e.g. /tmp/mysql.sock"></label>
+          <label class="fr"><span>Database</span><input id="cf_database"></label>
+          <div class="fr2"><label class="fr"><span>User</span><input id="cf_user"></label><label class="fr"><span>Password</span><input id="cf_password" type="password" autocomplete="new-password"></label></div>
+        </div>
+        <label class="fr file" hidden><span>File path</span><input id="cf_path" placeholder="/path/to/database.sqlite"></label>
+        <div class="fr2">
+          <label class="fr"><span>Env</span><select id="cf_env"><option value="">none</option><option>local</option><option>dev</option><option>stage</option><option>prod</option></select></label>
+          <label class="fr"><span>Group</span><input id="cf_group" placeholder="optional"></label>
+        </div>
+        <div class="fr"><span>Color</span><div class="colr"><input id="cf_color" type="color" value="#2f6fec"><button type="button" class="ghost" id="cf_colorX">clear</button></div></div>
+        <div class="cm-res" id="cmRes"></div>
+      </div>
+      <div class="cm-foot">
+        <button type="button" class="dangerbtn" id="cmDel">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="cmTest">Test</button>
+        <button type="button" id="cmCancel">Cancel</button>
+        <button type="submit" class="primary" id="cmSave">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
 
 <template id="tplTable">
   <div class="pane">
     <div class="crumbs"></div>
     <div class="bar">
-      <div class="seg view"><button data-v="data" class="on">Дані</button><button data-v="structure">Структура</button></div>
-      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="Ctrl+Space — підказки"></div>
+      <div class="seg view"><button data-v="data" class="on">Data</button><button data-v="structure">Structure</button></div>
+      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="Ctrl+Space for suggestions"></div>
       <div class="field order-f"><span class="lbl">ORDER BY</span><input class="order mono" spellcheck="false"></div>
       <select class="limit"><option>50</option><option selected>100</option><option>500</option><option>1000</option></select>
-      <button class="primary run" title="Виконати (Enter)">▶</button>
+      <button class="primary run" title="Run (Enter)">▶</button>
     </div>
     <div class="bar bar2">
-      <div class="seg mode"><button data-m="grid" class="on" title="Звичайна таблиця">Таблиця</button><button data-m="transpose" title="Рядки ↔ колонки">Transpose</button></div>
-      <button class="cols" title="Які колонки показувати"></button>
-      <button class="prev" title="Попередня сторінка">‹</button><span class="page"></span><button class="next" title="Наступна сторінка">›</button>
-      <button class="count" title="SELECT COUNT(*) з поточним WHERE">COUNT</button>
+      <div class="seg mode"><button data-m="grid" class="on" title="Regular table">Table</button><button data-m="transpose" title="Rows ↔ columns">Transpose</button></div>
+      <button class="cols" title="Which columns to show"></button>
+      <button class="prev" title="Previous page">‹</button><span class="page"></span><button class="next" title="Next page">›</button>
+      <button class="count" title="SELECT COUNT(*) with the current WHERE">COUNT</button>
       <span class="spacer"></span>
-      <button class="tosql" title="Відкрити цей запит у SQL-консолі">У консоль</button>
-      <button class="json" title="Копіювати як JSON">JSON</button><button class="tsv" title="Копіювати як TSV (для Excel)">TSV</button>
+      <button class="tosql" title="Open this query in the SQL console">To console</button>
+      <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
@@ -69,16 +108,16 @@
 <template id="tplConsole">
   <div class="pane">
     <div class="crumbs"></div>
-    <div class="editor"><pre class="hl mono" aria-hidden="true"></pre><textarea class="mono" spellcheck="false" placeholder="SELECT …&#10;&#10;⌘/Ctrl+Enter — виконати виділене або запит під курсором&#10;Ctrl+Space — підказки (таблиці, колонки, alias., enum-значення)"></textarea></div>
+    <div class="editor"><pre class="hl mono" aria-hidden="true"></pre><textarea class="mono" spellcheck="false" placeholder="SELECT …&#10;&#10;⌘/Ctrl+Enter — run the selection or the statement under the caret&#10;Ctrl+Space — suggestions (tables, columns, alias., enum values)"></textarea></div>
     <div class="bar">
-      <button class="primary run" title="⌘/Ctrl+Enter">▶ Виконати</button>
-      <button class="explain" title="План виконання (запит не виконується)">EXPLAIN</button>
-      <button class="analyze" title="EXPLAIN ANALYZE: виконує запит і показує реальний час кожного кроку">EXPLAIN ANALYZE</button>
+      <button class="primary run" title="⌘/Ctrl+Enter">▶ Run</button>
+      <button class="explain" title="Execution plan (the query is not executed)">EXPLAIN</button>
+      <button class="analyze" title="EXPLAIN ANALYZE: executes the query and shows real timings">EXPLAIN ANALYZE</button>
       <select class="limit"><option>100</option><option>500</option><option>1000</option><option>5000</option></select>
       <span class="spacer"></span>
-      <div class="seg mode"><button data-m="grid" class="on">Таблиця</button><button data-m="transpose">Transpose</button></div>
-      <button class="cols" title="Які колонки показувати"></button>
-      <button class="json" title="Копіювати як JSON">JSON</button><button class="tsv" title="Копіювати як TSV (для Excel)">TSV</button>
+      <div class="seg mode"><button data-m="grid" class="on">Table</button><button data-m="transpose">Transpose</button></div>
+      <button class="cols" title="Which columns to show"></button>
+      <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
