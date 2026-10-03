@@ -12,3 +12,6 @@ native/**/DerivedData/
 *.xcuserstate
 xcuserdata/
 .claude/settings.local.json
+.scratch-home/
+.scratch-home.db
+*.egg-info/
