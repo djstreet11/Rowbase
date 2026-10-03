@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-03 (Phase 1 core landed).
+> Last update: 2026-10-04 (Phase 2 native MVP landed).
 
 ## 1. Origin & idea
 
@@ -98,22 +98,29 @@ autocomplete), confirmation for writes on RW connections, history drawer, copy J
 See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New drivers = one class in `drivers.py`
 (connect/begin/run/alive/ident/lit + catalog SQL) + guard rules in `guard.py` + tests in `tests/test_engine.py`.
 
-### 4.2 Track B — Native macOS (Apple Silicon)
-- **Language/UI**: Swift 6 (strict concurrency), SwiftUI shell/settings/sidebar + AppKit `NSTableView` grid (virtualized)
-  and `NSTextView`/TextKit 2 SQL editor.
-- **Targets**: macOS 14+, arm64 first. Toolchain available: Xcode 26.3, Swift 6.2.4.
-- **Layout** (planned):
+### 4.2 Track B — Native macOS (Apple Silicon) — MVP done
+- **Stack**: Swift 6 (strict concurrency), SwiftPM package `native/` (macOS 14+), SwiftUI shell + AppKit `NSTableView` grid
+  (virtualized) and `NSTextView` SQL editor. Drivers: PostgresNIO (extended protocol), MySQLNIO (text protocol, no
+  MULTI_STATEMENTS), system sqlite3. `scripts/bundle.sh` → ad-hoc signed `dist/Rowbase.app`.
+- **Layout**:
   ```
   native/
-    Rowbase.xcodeproj (or XcodeGen spec)
-    Packages/RowbaseCore     connection model, store, guard (port of guard.py + same test vectors), query engine protocols
-    Packages/RowbaseDrivers  MySQL (MySQLNIO), Postgres (PostgresNIO), SQLite (system sqlite3)
-    App/                     SwiftUI views, AppKit grid & editor
+    Package.swift
+    Sources/RowbaseCore   Models (Connection, Dialect, QueryResult, TableInfo), Store (+Keychain, URL parsing), Guard (port),
+                          Driver (DBSession protocol + Catalog SQL), SQLite/Postgres/MySQL sessions, Engine actor (+History)
+    Sources/Rowbase       App, AppState, WorkTab, Sidebar, TabBar, TableTab, Structure, QueryTab, ResultGrid, SQLEditor,
+                          RowInspector, ConnectionsSheet, HistorySheet
+    Tests/RowbaseCoreTests  guard conformance (shared JSON), store/URL, engine on real SQLite/PG/MariaDB
   ```
-- **Secrets**: Keychain generic password, service `rowbase`, account = connection id — same items the Python track writes.
-- **Store**: reads/writes the same `~/.config/rowbase/connections.json` (non-sandboxed Developer ID app).
-- **Networking**: SwiftNIO drivers (async/await), SSH via `swift-nio-ssh`, TLS via NIOSSL. One actor per pool; cancel via `KILL QUERY` / `pg_cancel_backend`.
-- **Distribution**: Developer ID + notarized DMG, Sparkle updates. App Store would need sandbox (conflicts with shared store/SSH) — not planned.
+- **Features (MVP)**: shared connection store + Keychain, connection manager sheet (URL paste, test, RO toggle, env/color/group),
+  table browser with filter, tabs, data/structure views, WHERE/ORDER BY, paging, count, FK navigation + breadcrumbs, row inspector
+  with referenced-by, SQL console (highlighting, ⌘↩ statement under caret, EXPLAIN, PG Seq Scan highlight), RW confirmation
+  (incl. data-modifying WITH / EXPLAIN ANALYZE), prod accent bar, history (same JSONL as Python), copy TSV/JSON.
+- **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
+- **Gaps**: no autocomplete in editor, no query cancel, no SSH, empty result sets show no column names (MySQL/PG),
+  timestamps shown in UTC ISO format, Postgres values decoded from binary (unknown types → text/hex fallback),
+  not notarized.
+- **Distribution (later)**: Developer ID + notarization, Sparkle. App Store not planned (sandbox vs shared store/SSH).
 
 ### 4.3 Future: Linux / Windows
 Options: (a) Python track + `pywebview` native window, (b) Tauri shell around the web UI, (c) Compose Desktop / Avalonia.
@@ -140,12 +147,11 @@ Deferred; keep contracts (§5) portable.
 | 0 — Foundation | git, spec, agent file, skills | ✅ 2026-10-03 |
 | 1 — Python generalization | package, store + keychain, MySQL/PG/SQLite, FK navigation, connection manager UI, English UI, tests | ✅ core 2026-10-03 |
 | 1b — Python polish | query cancel, SSH tunnel, CSV/SQL export, server-side sort, virtualized grid, i18n (en/ru/uk) | next |
-| 2 — Native MVP | Swift app: connection manager (Keychain), MySQL+PG+SQLite, sidebar, virtualized grid, SQL editor, history, guard | |
+| 2 — Native MVP | Swift app: connection manager (Keychain), MySQL+PG+SQLite, sidebar, virtualized grid, SQL editor, history, guard | ✅ 2026-10-04 |
 | 3 — Native parity+ | autocomplete, FK navigation, transpose, inspector, export, editing w/ pending changes, SSH, command palette | |
 | 4 — Ship | signing/notarization, DMG, auto-update, onboarding, import from TablePlus | |
 | 5 — Beyond | ER diagrams, AI assistant, MCP server, Linux/Windows | |
 
 ## 7. Open questions
 - License / monetization (open source? free core?).
-- Native project generation: XcodeGen/Tuist vs plain .xcodeproj.
 - UI languages beyond English (user speaks Russian/Ukrainian).

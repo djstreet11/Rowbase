@@ -21,7 +21,7 @@ Filter build noise: `swift build 2>&1 | grep -E "error|warning: " | sort -u`.
 ```
 ROWBASE_HOME=$PWD/../.scratch-home ROWBASE_SECRETS=file ROWBASE_SNAPSHOT=$TMP/rb.png \
   ROWBASE_SNAPSHOT_CONN=lite ROWBASE_SNAPSHOT_TABLE=orders [ROWBASE_SNAPSHOT_SQL='select …'] \
-  [ROWBASE_SNAPSHOT_SHEET=connections] timeout 40 .build/debug/Rowbase
+  [ROWBASE_SNAPSHOT_SHEET=connections] perl -e 'alarm 40; exec @ARGV' .build/debug/Rowbase   # macOS has no `timeout`
 ```
 Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the real store/Keychain stay untouched.
 
@@ -34,3 +34,8 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   the EventLoopFuture overload is picked. Results are binary → `PGFormat.cell` decodes common types.
 - `String(validating:as:)` is macOS 15+ → use `String(bytes:encoding:)`.
 - Empty result sets have no column names (MySQL/PG text paths) — known gap.
+- Snapshots: `cacheDisplay` can't capture vibrancy / the macOS 26 glass sidebar → in snapshot mode (`isSnapshot`) the app uses a
+  plain HStack layout and opaque backgrounds. Keep that when changing MainView/SidebarView.
+- Quote tables with `Dialect.ident`, columns with `Dialect.column` (PG ident adds `public.`).
+- Review checklist for delegated UI work: build, `swift test`, snapshots of table tab (PG + MySQL + SQLite), SQL tab, EXPLAIN,
+  connections sheet; read AppState.run/confirm for safety.

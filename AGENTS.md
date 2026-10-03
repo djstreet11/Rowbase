@@ -53,3 +53,7 @@ short: facts and rules only, no history.
 - 2026-10-03: Built-in browser pane resizes/scales unpredictably → verify UI by driving the DOM with `javascript_tool` and reading state; screenshots only for visuals.
 - 2026-10-03: Subagent frontend work passed `node --check` but had 2 functional bugs found only in-browser — always browser-test delegated UI.
 - 2026-10-03: Safety controls (Read-only toggle) must be visible without scrolling in forms.
+- 2026-10-04: Dialect.ident() is for TABLES (PG adds `public.`); quote columns with Dialect.column() — mixing them broke PG ORDER BY.
+- 2026-10-04: PG binary NUMERIC must be decoded manually to keep dscale (Decimal/PostgresNumeric drop "7.00" → "7").
+- 2026-10-04: RW write-confirmation must also catch data-modifying `WITH … DELETE` and `EXPLAIN ANALYZE <write>`.
+- 2026-10-04: macOS has no `timeout` → `perl -e 'alarm 40; exec @ARGV' cmd`. No screen-recording permission → app self-snapshot hook.
