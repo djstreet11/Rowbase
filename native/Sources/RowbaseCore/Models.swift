@@ -68,6 +68,13 @@ public enum Dialect: String, Sendable, CaseIterable {
     public var defaultPort: Int? { self == .mysql ? 3306 : self == .postgres ? 5432 : nil }
     public var quote: Character { self == .mysql ? "`" : "\"" }
 
+    /// Quote a column (or other single-part) identifier.
+    public func column(_ name: String) -> String {
+        let q = String(quote)
+        return q + name.replacingOccurrences(of: q, with: q + q) + q
+    }
+
+    /// Quote a table name; Postgres "schema.table" names are split, bare names get the `public` schema.
     public func ident(_ name: String) -> String {
         let q = String(quote)
         if self == .postgres {

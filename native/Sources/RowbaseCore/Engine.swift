@@ -108,6 +108,12 @@ public struct History: Sendable {
         public var error: String?
         public var affected: Int?
         public var id: String { ts + sql }
+
+        public init(ts: String = History.now(), conn: String, connName: String?, sql: String, source: String?,
+                    rows: Int? = nil, elapsed: Double? = nil, error: String? = nil, affected: Int? = nil) {
+            (self.ts, self.conn, self.connName, self.sql, self.source) = (ts, conn, connName, sql, source)
+            (self.rows, self.elapsed, self.error, self.affected) = (rows, elapsed, error, affected)
+        }
     }
 
     public let url: URL

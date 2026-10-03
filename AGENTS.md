@@ -6,7 +6,7 @@ Self-updating: see **Self-learning** below. Full product/tech spec: [SPEC.md](SP
 ## Project in one paragraph
 Rowbase: a fast, beautiful, read-only-by-default DB client with a connection manager (TablePlus-like). Born from a work tool,
 re-implemented generically (no company/1C specifics). Two tracks: **A — Python** (`rowbase` CLI for agents + local web UI;
-MySQL/MariaDB, PostgreSQL, SQLite) and **B — native macOS app** (Swift 6 + SwiftUI/AppKit, Apple Silicon, planned in `native/`).
+MySQL/MariaDB, PostgreSQL, SQLite) and **B — native macOS app** (Swift 6 + SwiftUI/AppKit, Apple Silicon, `native/`, SwiftPM).
 Linux/Windows — far future.
 
 ## Layout
@@ -14,7 +14,9 @@ Linux/Windows — far future.
   (execute, pool, catalog), `cli.py`, `server.py` (HTTP API), `static/` (vanilla JS UI).
 - `tests/` — `python -m unittest discover -s tests -t .` (PG/MySQL tests auto-skip if unreachable).
 - `SPEC.md` — spec & roadmap (§5 = cross-track contracts). `docs/decisions.md` — ADRs.
-- `.claude/skills/` — `learn` (self-update), `db-query` (use the CLI), `run-ui` (launch/verify web UI), `add-driver`.
+- `native/` — Swift app: `RowbaseCore` (store, Keychain, guard, drivers, engine) + `Rowbase` (SwiftUI/AppKit UI). `swift test`.
+- `tests/guard_vectors.json` — guard conformance cases shared by Python and Swift suites.
+- `.claude/skills/` — `learn` (self-update), `db-query` (use the CLI), `run-ui` (web UI), `add-driver`, `native-app` (build/test/snapshot Mac app).
 
 ## Rules
 - **Language**: code, comments, docs, commits, UI strings in English. Final user-facing report in Russian.

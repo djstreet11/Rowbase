@@ -59,6 +59,7 @@ struct GuardVectors: Decodable {
         #expect(Dialect.postgres.ident("crm.orders") == "\"crm\".\"orders\"")
         #expect(Dialect.postgres.ident("users") == "\"public\".\"users\"")
         #expect(Dialect.mysql.ident("we`ird") == "`we``ird`")
+        #expect(Dialect.postgres.column("id") == "\"id\"" && Dialect.mysql.column("a.b") == "`a.b`")
         #expect(Dialect.mysql.literal("a'\\") == "'a''\\\\'")
     }
 

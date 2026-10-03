@@ -2,6 +2,15 @@
 
 Newest on top. Format: Context | Decision | Alternatives | Consequences.
 
+## 2026-10-04 — Native project = pure SwiftPM, app bundle by script
+Context: no XcodeGen/Tuist installed; agents must build/test from CLI. Decision: `native/Package.swift` with RowbaseCore library +
+Rowbase executable; `scripts/bundle.sh` assembles an ad-hoc signed `Rowbase.app`; Xcode opens Package.swift directly.
+Alternatives: .xcodeproj (binary-ish, merge-hostile), XcodeGen (extra tool). Consequences: AppDelegate must set activation policy;
+signing/notarization handled in the script later (Phase 4).
+
+## 2026-10-04 — Shared guard conformance vectors
+Decision: `tests/guard_vectors.json` is the single source of guard test cases for Python and Swift. Consequences: guards cannot drift silently.
+
 ## 2026-10-03 — Name "Rowbase", drop work-specific code
 Context: prototype was tied to the work project (AWIS, 1C metadata, Config.php). User: not needed here.
 Decision: product/CLI/package name **Rowbase**; 1C ref resolution replaced by generic FK navigation (catalog `fk`, `referencedBy`).

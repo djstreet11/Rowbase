@@ -106,6 +106,35 @@ enum PGFormat {
         return f
     }()
 
+    /// Binary NUMERIC: ndigits, weight, sign, dscale (int16 each) + base-10000 digits. Honors dscale (7.00, not 7).
+    static func numeric(_ buf: inout ByteBuffer) -> String? {
+        guard let nd = buf.readInteger(as: Int16.self), let weight = buf.readInteger(as: Int16.self),
+              let sign = buf.readInteger(as: UInt16.self), let dscale = buf.readInteger(as: Int16.self) else { return nil }
+        if sign == 0xC000 { return "NaN" }
+        if sign == 0xD000 { return "Infinity" }
+        if sign == 0xF000 { return "-Infinity" }
+        var digits: [Int16] = []
+        for _ in 0..<nd { guard let d = buf.readInteger(as: Int16.self) else { return nil }; digits.append(d) }
+        var intPart = ""
+        if weight < 0 { intPart = "0" } else {
+            for i in 0...Int(weight) {
+                let d = i < digits.count ? digits[i] : 0
+                intPart += i == 0 ? String(d) : String(format: "%04d", d)
+            }
+        }
+        var frac = ""
+        if dscale > 0 {
+            var i = Int(weight) + 1
+            while frac.count < Int(dscale) {
+                let d = i >= 0 && i < digits.count ? digits[i] : 0
+                frac += String(format: "%04d", d)
+                i += 1
+            }
+            frac = "." + frac.prefix(Int(dscale))
+        }
+        return (sign == 0x4000 ? "-" : "") + intPart + frac
+    }
+
     static func cell(_ c: PostgresCell) -> String? {
         guard var buf = c.bytes else { return nil }
         switch c.dataType {
@@ -116,7 +145,7 @@ enum PGFormat {
         case .oid: return buf.readInteger(as: UInt32.self).map(String.init)
         case .float4: return (try? c.decode(Float.self)).map { "\($0)" }
         case .float8: return (try? c.decode(Double.self)).map { "\($0)" }
-        case .numeric: return (try? c.decode(Decimal.self)).map { "\($0)" }
+        case .numeric: return numeric(&buf)
         case .uuid: return (try? c.decode(UUID.self)).map { $0.uuidString.lowercased() }
         case .timestamptz: return (try? c.decode(Date.self)).map { iso.string(from: $0) }
         case .timestamp: return (try? c.decode(Date.self)).map { iso.string(from: $0).replacingOccurrences(of: "Z", with: "") }

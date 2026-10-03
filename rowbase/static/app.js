@@ -523,7 +523,9 @@ function runConsole(t, prefix) {
   const c = connOf(t.conn);
   if (!c) return toast('Connection no longer exists');
   const first = (/^\s*\(*\s*(\w+)/.exec(stripLiterals(sql.replace(/^\s*EXPLAIN\s+ANALYZE\s+/i, ''))) || [])[1] || '';
-  if (!c.readOnly && !READ_FIRST.test(first) && !confirm(`Run on READ-WRITE connection ${c.name}?\n\n${sql.slice(0, 300)}`)) return;
+  // data-modifying CTEs (WITH x AS (DELETE …)) execute writes too
+  const writes = !READ_FIRST.test(first) || (/^WITH$/i.test(first) && /\b(INSERT|UPDATE|DELETE|MERGE)\b/i.test(stripLiterals(sql)));
+  if (!c.readOnly && writes && !confirm(`Run on READ-WRITE connection ${c.name}?\n\n${sql.slice(0, 300)}`)) return;
   $('.sqlline', t.el).textContent = sql.replace(/\s+/g, ' ');
   return execute(t, sql, t.limit, prefix ? prefix.trim().toLowerCase() : 'console');
 }

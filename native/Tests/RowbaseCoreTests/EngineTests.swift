@@ -120,6 +120,8 @@ enum Fixture {
         #expect(!(try await e.ping(ro)).isEmpty)
 
         if d == .postgres {
+            let n = try await e.execute(ro, "SELECT 7::numeric(10,2), -0.05::numeric(6,3), 12345678.9::numeric, 0::numeric, 'NaN'::numeric, 10000::numeric(8,1)")
+            #expect(n.rows[0] == ["7.00", "-0.050", "12345678.9", "0", "NaN", "10000.0"])
             let p = try await e.execute(ro, "SELECT meta, u, d, at FROM \(qo) WHERE id = 1")
             #expect(p.rows[0][0] == #"{"a": 1}"# && p.rows[0][1] == "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" && p.rows[0][2] == "2026-10-04")
             #expect(p.rows[0][3]?.contains("T") == true)
