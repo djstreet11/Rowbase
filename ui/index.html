@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWIS DB</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <div class="brand">AWIS <span>DB</span></div>
+  <select id="conn" title="Підключення з Config.php"></select>
+  <span class="ro">read-only</span>
+  <div class="spacer"></div>
+  <input id="refInput" class="mono" placeholder="Знайти об'єкт за Ref (UUID)…">
+  <button id="newConsole" title="Нова SQL-консоль">+ SQL</button>
+  <button id="historyBtn" title="Історія виконаних запитів">Історія</button>
+  <button id="refreshBtn" class="ghost" title="Скинути кеш схеми">⟳</button>
+</header>
+<aside>
+  <div class="tools">
+    <input id="tableFilter" placeholder="Пошук таблиці  ( / )">
+    <label><input type="checkbox" id="hideService" checked> сховати службові (DEL_, _tmp, _…)</label>
+  </div>
+  <div id="tableList"></div>
+</aside>
+<main>
+  <div id="tabbar"></div>
+  <div id="panes">
+    <div class="empty" id="welcome">Оберіть таблицю зліва, знайдіть об'єкт за Ref або відкрийте SQL-консоль (+ SQL).</div>
+  </div>
+</main>
+<footer><span id="st">—</span><span id="stWarn" class="warn"></span><span class="spacer"></span><span id="stConn"></span></footer>
+
+<div class="drawer" id="rowDrawer">
+  <div class="dh"><b id="rowTitle"></b><input id="rowFilter" placeholder="Пошук поля або значення"><button id="rowCopy">JSON</button><button class="ghost" id="rowClose">✕</button></div>
+  <div class="db" id="rowBody"></div>
+</div>
+<div class="drawer" id="histDrawer">
+  <div class="dh"><b>Історія</b><input id="histFilter" placeholder="Пошук у запитах"><label class="chk"><input type="checkbox" id="histErrors"> лише помилки</label><button class="ghost" id="histClose">✕</button></div>
+  <div class="db" id="histBody"></div>
+</div>
+
+<template id="tplTable">
+  <div class="pane">
+    <div class="crumbs"></div>
+    <div class="bar">
+      <div class="seg view"><button data-v="data" class="on">Дані</button><button data-v="structure">Структура</button></div>
+      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="Ctrl+Space — підказки"></div>
+      <div class="field order-f"><span class="lbl">ORDER BY</span><input class="order mono" spellcheck="false"></div>
+      <select class="limit"><option>50</option><option selected>100</option><option>500</option><option>1000</option></select>
+      <button class="primary run" title="Виконати (Enter)">▶</button>
+    </div>
+    <div class="bar bar2">
+      <div class="seg mode"><button data-m="grid" class="on" title="Звичайна таблиця">Таблиця</button><button data-m="transpose" title="Рядки ↔ колонки">Transpose</button></div>
+      <button class="cols" title="Які колонки показувати"></button>
+      <button class="prev" title="Попередня сторінка">‹</button><span class="page"></span><button class="next" title="Наступна сторінка">›</button>
+      <button class="count" title="SELECT COUNT(*) з поточним WHERE">COUNT</button>
+      <span class="spacer"></span>
+      <button class="tosql" title="Відкрити цей запит у SQL-консолі">У консоль</button>
+      <button class="json" title="Копіювати як JSON">JSON</button><button class="tsv" title="Копіювати як TSV (для Excel)">TSV</button>
+    </div>
+    <div class="sqlline mono"></div>
+    <div class="gridwrap result"></div>
+    <div class="gridwrap structure" hidden></div>
+  </div>
+</template>
+
+<template id="tplConsole">
+  <div class="pane">
+    <div class="crumbs"></div>
+    <div class="editor"><pre class="hl mono" aria-hidden="true"></pre><textarea class="mono" spellcheck="false" placeholder="SELECT …&#10;&#10;⌘/Ctrl+Enter — виконати виділене або запит під курсором&#10;Ctrl+Space — підказки (таблиці, колонки, alias., enum-значення)"></textarea></div>
+    <div class="bar">
+      <button class="primary run" title="⌘/Ctrl+Enter">▶ Виконати</button>
+      <button class="explain" title="План виконання (запит не виконується)">EXPLAIN</button>
+      <button class="analyze" title="EXPLAIN ANALYZE: виконує запит і показує реальний час кожного кроку">EXPLAIN ANALYZE</button>
+      <select class="limit"><option>100</option><option>500</option><option>1000</option><option>5000</option></select>
+      <span class="spacer"></span>
+      <div class="seg mode"><button data-m="grid" class="on">Таблиця</button><button data-m="transpose">Transpose</button></div>
+      <button class="cols" title="Які колонки показувати"></button>
+      <button class="json" title="Копіювати як JSON">JSON</button><button class="tsv" title="Копіювати як TSV (для Excel)">TSV</button>
+    </div>
+    <div class="sqlline mono"></div>
+    <div class="gridwrap result"></div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
