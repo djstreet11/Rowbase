@@ -1,156 +1,151 @@
-# DB Client — Product & Technical Spec
+# Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-03 (initial scan).
+> Last update: 2026-10-03 (Phase 1 core landed).
 
 ## 1. Origin & idea
 
-Started at work as a tool for an AI agent (Claude Code / Amp) to read the company's (AWIS, 1C-based) MySQL databases:
-1. `db.py` — CLI + skill so the agent can query DBs safely (read-only).
-2. `ui.py` + `ui/` — a local web UI on top of it, because the JetBrains DB console was inconvenient.
-3. UI/UX polished further because existing tools (Adminer, TablePlus, DbGate, etc.) are either paywalled ("buy premium"), confusing, or look like the 90s.
+Started at work as a tool for an AI agent (Claude Code / Amp) to read a company MySQL database safely: a CLI + skill,
+then a local web UI (JetBrains DB console was inconvenient), then a polished UX because existing tools (Adminer, TablePlus,
+DbGate, …) are paywalled, confusing or dated. The work version was tied to that company's stack; **Rowbase** is the clean,
+universal re-implementation — nothing company-specific is carried over.
 
-**Goal now:** turn it into a universal, pleasant DB client that stores connections (TablePlus-like), with:
-- **Track A — Python** (current format): CLI for agents + local web UI. Cross-platform by nature.
-- **Track B — Native macOS app** for Apple Silicon (M-series), native language & UI, full feature set, perfect performance.
+**Name:** Rowbase (CLI `rowbase`, Python package `rowbase`, future app "Rowbase.app").
+
+**Goal:** a fast, beautiful, safe-by-default DB client that stores connections (TablePlus-like), with:
+- **Track A — Python**: CLI for agents + local web UI. Cross-platform by nature.
+- **Track B — Native macOS app** for Apple Silicon, native language & UI, full feature set.
 - **Future (far):** Linux (Ubuntu) and Windows.
 
-## 2. Current state (as scanned)
+## 2. Current state — Track A (Python)
 
-| File | Lines | Role |
-|---|---|---|
-| `db.py` | 322 | CLI (`conns`, `ping`, `tables`, `desc`, `q`), connection loading, SQL guard, executor, pooling, formatting |
-| `ui.py` | 329 | `ThreadingHTTPServer` on 127.0.0.1, JSON API, schema cache, 1C ref resolution, history |
-| `ui/index.html` | 90 | Shell: header, sidebar, tabs, drawers, templates for table/console panes |
-| `ui/app.js` | 845 | Vanilla JS app (no deps): tabs, table browser, SQL console, autocomplete, highlighting, export, history |
-| `ui/app.css` | 144 | Light/dark theme via CSS vars, system fonts |
+```
+rowbase/
+  guard.py    dialect-aware read-only guard (length-preserving scanner: comments, quotes, E'' and $$ strings)
+  drivers.py  MySQL (pymysql), Postgres (psycopg 3), SQLite (stdlib): connect, begin, run, catalog SQL
+  store.py    connections.json + secrets (keyring / 0600 file / env), URL parsing
+  engine.py   execute (guard, auto LIMIT, pool, RO/RW tx), formatting, catalog (tables, table_info with FKs)
+  cli.py      `rowbase add|rm|conns|ping|tables|desc|q|ui`
+  server.py   stdlib HTTP server (127.0.0.1) + JSON API + history
+  static/     vanilla JS/CSS UI (index.html, app.js, app.css)
+tests/        unittest: guard, engine+catalog on real SQLite/PG/MySQL, store, HTTP API
+pyproject.toml  deps: pymysql, psycopg[binary], keyring
+```
 
-### 2.1 db.py
-- **Connections**: parsed from `awis.loc/solution/config/Config.php` (`DBHost/DBName/DBUser/DBPassword` + `ExternalDatabaseConnections`, incl. aliases), overridable via `~/.config/awis-db/connections.json`. Env: `AWIS_CONFIG_PHP`, `AWIS_DB_CONN`. Passwords never printed.
-- **Driver**: `pymysql` only (MySQL/MariaDB). Expected venv: `~/.config/awis-db/.venv`. *Not installed in system python on this Mac.*
-- **Read-only guard** (defense in depth):
-  1. Strip comments → reject multiple statements (`;` outside literals).
-  2. First word ∈ `SELECT SHOW DESC DESCRIBE EXPLAIN WITH`.
-  3. Forbidden patterns: `INTO OUTFILE/DUMPFILE`, `FOR UPDATE`, `LOCK IN SHARE MODE`, `GET_LOCK(`, `SLEEP(`, `BENCHMARK(`.
-  4. Session `SET SESSION TRANSACTION READ ONLY` + per-statement `START TRANSACTION READ ONLY` + always `rollback`.
-  5. Timeout: `max_execution_time` (MySQL) / `max_statement_time` (MariaDB).
-- **Auto LIMIT**: SELECT/WITH without trailing LIMIT gets `LIMIT n+1` → `truncated` flag.
-- **Pool**: up to 4 idle sessions per conn (VPN connect ≈0.5s vs stmt ≈0.05s); retry once on dropped session.
-- **Formatting**: BINARY(16) → UUID or hex; Decimal/dates → str. Output: `table | json | tsv | vertical`, `--out file`.
+### 2.1 Safety model (read-only connections — the default)
+1. **Driver**: exactly one statement per call — pymysql without MULTI_STATEMENTS, psycopg prepared (extended protocol),
+   sqlite3 `execute`. Verified by tests even with the guard bypassed.
+2. **Guard**: one statement; first keyword allow-list per dialect; forbidden patterns (locks, sleep, file I/O, `set_config`,
+   PG `INTO`, sqlite `load_extension`, …).
+3. **Transaction**: MySQL `START TRANSACTION READ ONLY`, PG `BEGIN READ ONLY` (+`SET LOCAL statement_timeout`),
+   SQLite file opened `mode=ro`. Always rolled back.
+4. **Timeouts**: MySQL `max_execution_time`, MariaDB `max_statement_time`, PG `statement_timeout`, SQLite progress-handler deadline.
+5. Write-enabled connections (`readOnly: false`) skip the guard and commit; still one statement per call.
 
-### 2.2 ui.py (HTTP API)
-- Security: binds 127.0.0.1, checks `Host` header (DNS-rebinding), requires `X-AWIS-UI: 1` header on API (blocks CSRF).
-- GET `/api/conns`, `/api/tables?conn`, `/api/table?conn&name` (columns+indexes+refs), `/api/history?limit`.
-- POST `/api/query {conn,sql,limit≤5000,timeout,source,history}`, `/api/resolve {conn,value,table,column,tref}`, `/api/refresh`.
-- History: `~/.config/awis-db/ui-history.jsonl`, trimmed to last 2000 entries when >2MB.
-- **AWIS/1C-specific**: `metadata_full.xml` parsing (StoreType → ref target tables), `Catalog*/Document*/ChartOf*` tables with `char(36)` PK `Ref`, ref resolution strategies: `TRef` column → learned → metadata → name heuristic → full scan; labels from `Description/Number/Code`.
+### 2.2 Execution
+- Auto `LIMIT n+1` for SELECT (and WITH on RO) without a trailing LIMIT → `truncated`. Otherwise fetch cap 50 000 rows.
+- Pool: ≤4 idle sessions per connection, keyed by connection config (edits invalidate), retry once on dropped session.
+- Values: bytes(16) → UUID (or hex), other bytes → utf-8 or `0x…`, Decimal/dates/UUID/inet → str, json → JSON text.
 
-### 2.3 Web UI features
-- Connection selector, table sidebar (filter `/`, hide service tables `DEL_ _ tmp`, approx row counts).
-- Tabs (persisted in localStorage), table tabs dedup by conn+table+where; middle-click close.
-- Table pane: Data/Structure views, WHERE + ORDER BY inputs with autocomplete (columns, keywords, functions, enum values, 0/1 for tinyint(1), empty-ref for char(36)), limit, paging, COUNT, "to console", default order by `DateTime`/`LastModificationDate` DESC.
-- Grid / Transpose modes, client-side sort, column picker (hidden cols persisted per table), row drawer (filter, copy JSON), copy result as JSON/TSV.
-- Ref navigation: click UUID → resolve → open target row in new tab, breadcrumbs chain.
-- SQL console: overlay syntax highlighting (textarea + pre), ⌘/Ctrl+Enter runs selection or statement under caret, Tab indent, EXPLAIN / EXPLAIN ANALYZE, EXPLAIN highlighting (`type=ALL`, rows>100k).
-- Context-aware autocomplete: FROM/JOIN → tables; `alias.` → columns; aliases; values.
-- History drawer: filter, errors only, click → open in new console.
-- Status bar: rows, elapsed, truncation warning, connection.
-- UI language: Ukrainian. No external deps.
+### 2.3 Connection store (shared contract, see §5)
+- `~/.config/rowbase/connections.json` (override dir: `ROWBASE_HOME`), no secrets.
+- Passwords: OS keychain via `keyring` (service `rowbase`, account = connection id) → fallback `secrets.json` 0600
+  (`ROWBASE_SECRETS=file` forces it) → `ROWBASE_PASSWORD_<NAME>` env overrides.
+- URLs: `mysql|mariadb://`, `postgres|postgresql|pg://` (`?sslmode=`, `?socket=`), `sqlite:///abs/path`.
 
-### 2.4 Gaps / tech debt (to fix in generalization)
-- Hard-wired to AWIS (paths, Config.php, 1C metadata, `X-AWIS-UI`, brand). → move into an **AWIS plugin**.
-- MySQL only. Read-only only (no editing). No connection manager UI, no SSH tunnel/TLS options.
-- Passwords in plain config files. → Keychain (macOS) / `keyring` (Python).
-- Credentials reloaded (`load_connections()`) on every new connection; regex PHP parsing is fragile.
-- No tests. No packaging (`pyproject`), no i18n (UK strings inline in JS).
-- Client-side sort only sorts current page; grid renders full HTML (no virtualization) — slow for >5k rows.
+### 2.4 HTTP API (header `X-Rowbase: 1`, Host must be localhost)
+GET `/api/conns`, `/api/tables?conn`, `/api/table?conn&name` → `{name, quoted, driver, columns[{…, fk}], indexes, referencedBy}`,
+`/api/history?limit&conn`. POST `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`.
+History: `~/.config/rowbase/history.jsonl` (last 2000 entries).
+
+### 2.5 Web UI features
+Connection manager (modal: URL paste, test, RO toggle, env/color/group), connection switcher with RO/RW badge and prod
+accent, table sidebar with filter (`/`), tabs persisted in localStorage, Data/Structure views, WHERE/ORDER BY with
+autocomplete, paging, COUNT, grid/transpose, column picker, row inspector with "Referenced by", **FK navigation** with
+breadcrumbs, SQL console (highlighting, ⌘/Ctrl+Enter statement under caret, dialect EXPLAIN buttons, schema-aware
+autocomplete), confirmation for writes on RW connections, history drawer, copy JSON/TSV. English UI, no deps.
+
+### 2.6 Known gaps
+- No query cancel; no SSH tunnel; no TLS options for MySQL; no editing grid (only SQL on RW connections).
+- Client-side sort sorts only the current page; grid not virtualized (slow >5k rows).
+- No i18n yet (English only).
 
 ## 3. Product vision
 
 **Positioning:** fast, beautiful, free(-core) DB client. TablePlus-level polish, agent-friendly, safe by default.
 
-### 3.1 Core principles
-1. **Safe by default** — connections are read-only unless explicitly switched to write mode (per connection, with color tag e.g. red = prod). Writes go through a review/commit step (TablePlus-style "pending changes").
+### 3.1 Principles
+1. **Safe by default** — read-only unless switched per connection; env color tags (prod = red); writes reviewed before commit.
 2. **Fast** — instant open, virtualized grids, pooled sessions, cancelable queries.
-3. **Keyboard-first** — every action has a shortcut; command palette (⌘K / ⌘P).
-4. **Agent-friendly** — CLI with stable JSON output, same guard, same connection store; an MCP server later.
-5. **Native look** — follows OS conventions, light/dark, no "90s" UI.
+3. **Keyboard-first** — shortcuts everywhere; command palette (⌘K).
+4. **Agent-friendly** — CLI with stable JSON output, same guard and connection store; MCP server later.
+5. **Native look** — OS conventions, light/dark.
 
-### 3.2 Feature set (target, both tracks unless noted)
-- **Connections manager**: CRUD, groups/folders, color tags, env label (local/dev/stage/prod), read-only flag, SSH tunnel (key/password/agent), TLS, socket, import (from TablePlus/DBeaver/URL `mysql://…`), export without secrets. Test connection.
-- **Drivers**: MySQL/MariaDB (P0), PostgreSQL (P0), SQLite (P1), then ClickHouse, MS SQL, Redis (later).
-- **Browser**: databases/schemas → tables/views/routines; filter; row estimates; favorites; recently opened.
-- **Data grid**: virtualized, sort (server-side), filter builder + raw WHERE, column picker, transpose, row inspector, FK/ref navigation (generic via FK constraints; AWIS ref resolution as plugin), copy as JSON/TSV/CSV/SQL INSERT/Markdown, export to file.
-- **Editing** (write mode only): inline edit, add/delete rows, pending-changes panel with generated SQL preview, commit/discard.
-- **Structure**: columns, indexes, FKs, DDL view; later: structure editing.
-- **SQL editor**: highlighting, schema-aware autocomplete, run statement/selection, multiple result tabs, EXPLAIN visualizer, format SQL, snippets/saved queries, cancel running query.
-- **History**: per connection, searchable, errors filter, re-run.
-- **Tabs & sessions** restored on relaunch.
-- **Plugins**: domain plugins (AWIS/1C refs) hook into: connection discovery, cell renderers, ref resolution, table labels.
-- **Later**: ER diagram, data compare, dump/restore, AI assistant (NL→SQL using schema), MCP server.
+### 3.2 Target feature set
+- **Connections**: CRUD, groups, color/env, RO flag, SSH tunnel (key/password/agent), TLS, socket, import (TablePlus/DBeaver/URL), export w/o secrets, test.
+- **Drivers**: MySQL/MariaDB, PostgreSQL, SQLite (done in Track A); later ClickHouse, MS SQL, Redis.
+- **Browser**: schemas → tables/views/routines; favorites; recents.
+- **Grid**: virtualized, server-side sort, filter builder + raw WHERE, column picker, transpose, row inspector, FK navigation, copy as JSON/TSV/CSV/SQL INSERT/Markdown, export to file.
+- **Editing** (RW only): inline edit, add/delete rows, pending-changes panel with SQL preview, commit/discard.
+- **Structure**: columns, indexes, FKs, DDL; later structure editing.
+- **SQL editor**: highlighting, autocomplete, statement/selection run, multiple results, EXPLAIN visualizer, formatter, saved queries, cancel.
+- **History**, **session restore**.
+- **Later**: ER diagram, data compare, dump/restore, AI assistant (NL→SQL), MCP server.
 
 ## 4. Architecture
 
-### 4.1 Track A — Python (cross-platform, agent-first)
-```
-dbclient/            (package; current db.py/ui.py become modules)
-  core/              connection store, guard, executor, pool, formatting
-  drivers/           mysql.py (pymysql), postgres.py (psycopg 3), sqlite.py (stdlib)
-  plugins/awis/      Config.php discovery, 1C metadata, ref resolver
-  cli.py             `dbc conns|ping|tables|desc|q` (current db.py CLI, stable JSON)
-  web/               server (stdlib http.server) + static ui/ (vanilla JS, no deps)
-```
-- Connection store: `~/.config/dbclient/connections.json` (no secrets) + secrets in OS keychain via `keyring` (fallback: env/file with 0600).
-- Keep zero-frontend-deps policy (vanilla JS/CSS). Python deps minimal: `pymysql`, `psycopg[binary]`, `keyring`.
-- Guard becomes per-dialect; read-only stays default.
+### 4.1 Track A — Python
+See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New drivers = one class in `drivers.py`
+(connect/begin/run/alive/ident/lit + catalog SQL) + guard rules in `guard.py` + tests in `tests/test_engine.py`.
 
 ### 4.2 Track B — Native macOS (Apple Silicon)
-- **Language/UI**: Swift 6 (strict concurrency), SwiftUI for app shell/settings/sidebars + **AppKit `NSTableView`** (wrapped via `NSViewRepresentable`) for the data grid (virtualized, fast for 100k+ rows); SQL editor on `NSTextView` with TextKit 2 highlighting.
-- **Targets**: macOS 14+ (Sonoma), arm64 primary (universal optional). Xcode 26 / Swift 6.2 available locally.
-- **Project layout**: Xcode app target + local Swift Package(s):
+- **Language/UI**: Swift 6 (strict concurrency), SwiftUI shell/settings/sidebar + AppKit `NSTableView` grid (virtualized)
+  and `NSTextView`/TextKit 2 SQL editor.
+- **Targets**: macOS 14+, arm64 first. Toolchain available: Xcode 26.3, Swift 6.2.4.
+- **Layout** (planned):
   ```
   native/
-    DBClient.xcodeproj (or Tuist/XcodeGen spec)
-    Packages/DBCore     connection model, store, guard, query engine protocols
-    Packages/DBDrivers  MySQL (MySQLNIO), Postgres (PostgresNIO), SQLite (system sqlite3)
-    Packages/DBPlugins  AWIS plugin
-    App/                SwiftUI views, AppKit grid & editor
+    Rowbase.xcodeproj (or XcodeGen spec)
+    Packages/RowbaseCore     connection model, store, guard (port of guard.py + same test vectors), query engine protocols
+    Packages/RowbaseDrivers  MySQL (MySQLNIO), Postgres (PostgresNIO), SQLite (system sqlite3)
+    App/                     SwiftUI views, AppKit grid & editor
   ```
-- **Secrets**: Keychain (`kSecClassGenericPassword`, per connection id). Connection metadata in `~/Library/Application Support/<App>/connections.json`.
-- **Networking**: SwiftNIO-based drivers (async/await), SSH tunnels via `swift-nio-ssh`, TLS via NIOSSL.
-- **Concurrency**: one actor per connection pool; queries cancelable (`KILL QUERY` / `pg_cancel_backend`).
-- **Distribution**: Developer ID signed + notarized DMG; later Sparkle for updates; App Store optional (sandbox limits SSH/socket — evaluate).
-- **Shared contract with Track A**: same `connections.json` schema (minus secrets), same history format (JSONL), same guard rules → both tracks + agents interoperate.
+- **Secrets**: Keychain generic password, service `rowbase`, account = connection id — same items the Python track writes.
+- **Store**: reads/writes the same `~/.config/rowbase/connections.json` (non-sandboxed Developer ID app).
+- **Networking**: SwiftNIO drivers (async/await), SSH via `swift-nio-ssh`, TLS via NIOSSL. One actor per pool; cancel via `KILL QUERY` / `pg_cancel_backend`.
+- **Distribution**: Developer ID + notarized DMG, Sparkle updates. App Store would need sandbox (conflicts with shared store/SSH) — not planned.
 
 ### 4.3 Future: Linux / Windows
-Options to evaluate when time comes: (a) Python track packaged (PyInstaller) with web UI in a native webview (`pywebview`); (b) Tauri shell around the web UI; (c) Kotlin Compose Desktop / .NET Avalonia. Decision deferred — keep core logic and UI contracts portable (JSON API, shared schemas).
+Options: (a) Python track + `pywebview` native window, (b) Tauri shell around the web UI, (c) Compose Desktop / Avalonia.
+Deferred; keep contracts (§5) portable.
 
-## 5. Shared data formats (contracts)
+## 5. Shared contracts (must stay identical across tracks)
 
-`connections.json` (no secrets):
+`~/.config/rowbase/connections.json`:
 ```json
 {"version": 1, "connections": [{
-  "id": "uuid", "name": "awis main", "driver": "mysql", "host": "…", "port": 3306,
-  "database": "…", "user": "…", "readOnly": true, "env": "prod", "color": "#d33",
-  "group": "work", "ssh": null, "tls": {"mode": "preferred"}, "plugin": "awis"
+  "id": "uuid", "name": "shop prod", "driver": "mysql|postgres|sqlite", "host": "…", "port": 3306, "socket": "/tmp/mysql.sock",
+  "database": "…", "path": "/abs/file.db", "user": "…", "readOnly": true, "env": "local|dev|stage|prod",
+  "color": "#d33", "group": "work", "options": {"sslmode": "require"}
 }]}
 ```
-History JSONL line: `{"ts","conn","sql","source","rows"|"error","elapsed"}` (already used by ui.py).
+- Secrets: keychain service `rowbase`, account = `id`.
+- History JSONL: `{"ts","conn"(id),"connName","sql","source","rows"|"error","elapsed","affected"?}`.
+- Guard: same allow-lists/forbidden patterns; `tests/test_guard.py` vectors are the conformance suite.
 
 ## 6. Roadmap
 
-| Phase | Scope |
-|---|---|
-| **0 — Foundation** (now) | git, spec, agent file, skills. |
-| **1 — Python generalization** | package layout, connection store + keyring, driver abstraction, Postgres + SQLite, AWIS → plugin, English UI + i18n (uk/en/ru), tests for guard. |
-| **2 — Native MVP** | Swift app: connection manager (Keychain), MySQL+Postgres, sidebar, virtualized grid, SQL editor w/ highlighting, history, read-only guard. |
-| **3 — Native parity+** | autocomplete, ref/FK navigation, transpose, row inspector, export, editing w/ pending changes, SSH tunnels, command palette. |
-| **4 — Polish & ship** | signing/notarization, DMG, auto-update, onboarding, import from TablePlus. |
-| **5 — Beyond** | ER diagrams, AI assistant, MCP server, Linux/Windows. |
+| Phase | Scope | Status |
+|---|---|---|
+| 0 — Foundation | git, spec, agent file, skills | ✅ 2026-10-03 |
+| 1 — Python generalization | package, store + keychain, MySQL/PG/SQLite, FK navigation, connection manager UI, English UI, tests | ✅ core 2026-10-03 |
+| 1b — Python polish | query cancel, SSH tunnel, CSV/SQL export, server-side sort, virtualized grid, i18n (en/ru/uk) | next |
+| 2 — Native MVP | Swift app: connection manager (Keychain), MySQL+PG+SQLite, sidebar, virtualized grid, SQL editor, history, guard | |
+| 3 — Native parity+ | autocomplete, FK navigation, transpose, inspector, export, editing w/ pending changes, SSH, command palette | |
+| 4 — Ship | signing/notarization, DMG, auto-update, onboarding, import from TablePlus | |
+| 5 — Beyond | ER diagrams, AI assistant, MCP server, Linux/Windows | |
 
 ## 7. Open questions
-- Product name (current working name: "DB Client"; brand in code: "AWIS DB").
-- License / monetization (free core? open source?).
-- Python track: keep stdlib HTTP server or move to a small framework? (current: stdlib, zero deps — preferred).
-- Native: XcodeGen/Tuist vs plain .xcodeproj.
-- UI language default (current UI is Ukrainian; user writes Russian; docs in English).
+- License / monetization (open source? free core?).
+- Native project generation: XcodeGen/Tuist vs plain .xcodeproj.
+- UI languages beyond English (user speaks Russian/Ukrainian).

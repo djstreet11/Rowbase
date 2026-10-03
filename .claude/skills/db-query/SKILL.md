@@ -1,36 +1,36 @@
 ---
 name: db-query
-description: Query a configured MySQL/MariaDB database read-only via db.py (list connections, ping, find tables, describe, run SELECT/SHOW/EXPLAIN). Use when you need real data or schema from a DB connection.
+description: Query a saved database connection (MySQL/MariaDB, PostgreSQL, SQLite) via the rowbase CLI — list/add connections, ping, find tables, describe (columns, FKs, indexes, referenced-by), run one statement. Use when you need real data or schema from a DB.
 ---
 
-# db-query — read-only DB access via CLI
+# db-query — DB access via the `rowbase` CLI
 
-Python with `pymysql` is required. System python lacks it → use a venv:
-```
-[ -x .venv/bin/python ] || (python3 -m venv .venv && .venv/bin/pip -q install pymysql)
-PY=.venv/bin/python   # work setup uses ~/.config/awis-db/.venv/bin/python
-```
+Setup (once): `[ -x .venv/bin/rowbase ] || (python3 -m venv .venv && .venv/bin/pip -q install -e .)`; `R=.venv/bin/rowbase`.
+For experiments that must not touch the user's real store/Keychain: `export ROWBASE_HOME=$PWD/.scratch-home ROWBASE_SECRETS=file`.
 
-Connections come from `AWIS_CONFIG_PHP` (Config.php) and/or `~/.config/awis-db/connections.json`:
-```json
-{"local": {"host": "127.0.0.1", "port": 3306, "database": "app", "user": "ro", "password": "…"}}
+## Connections
 ```
-Never print or commit passwords.
+$R conns                                               # name, driver, ro/RW, env, target (never passwords)
+$R add NAME 'postgres://user@host:5432/db?sslmode=require' [--rw] [--env prod] [--group g] [--password-stdin]
+$R add NAME 'mysql://user@/db?socket=/tmp/mysql.sock'  # local socket auth
+$R add NAME sqlite:///abs/path.db
+$R rm NAME
+```
+Read-only is the default; `--rw` only when the user explicitly wants writes. Password: URL, prompt, or `--password-stdin`
+(prefer stdin — no shell history). Never echo passwords.
 
-## Commands
+## Querying (`-c NAME`, or `ROWBASE_CONN`, or the only connection)
 ```
-$PY db.py conns                                  # list (no passwords)
-$PY db.py ping -c main                           # version, db, user, read_only flag
-$PY db.py tables <substr|LIKE%>                  # find tables by name/comment
-$PY db.py desc <table> [column] --indexes        # columns (+ indexes)
-$PY db.py q "SELECT … " --limit 50 --format json # one statement
-$PY db.py q - < query.sql    |   $PY db.py q -f query.sql --out res.json
+$R ping -c NAME
+$R tables [substr] -c NAME                    # Postgres non-public tables appear as schema.table
+$R desc TABLE [column] --indexes -c NAME       # columns + references; --indexes adds indexes and referenced-by
+$R q "SELECT …" -c NAME --limit 50 --format json
+$R q - < query.sql   |   $R q -f query.sql --out res.json
 ```
-Common flags: `-c/--conn` (default `$AWIS_DB_CONN` or `main`), `--limit` (auto-added to SELECT without LIMIT, default 100),
-`--format table|json|tsv|vertical`, `--ref uuid|hex`, `--width`, `--timeout` seconds.
+Flags: `--limit` (auto LIMIT for SELECT without one, default 100), `--format table|json|tsv|vertical`, `--timeout` s,
+`--ref uuid|hex` (16-byte binary), `--width`.
 
 ## Rules & tips
-- Only `SELECT SHOW DESC DESCRIBE EXPLAIN WITH`; one statement; no `FOR UPDATE`, `SLEEP`, `INTO OUTFILE`… (guard refuses).
-- Stderr line `TRUNCATED` → add WHERE/ORDER BY or raise `--limit`.
-- Prefer `--format json` for machine parsing, `vertical` for wide single rows.
-- Big tables: always filter by indexed columns; check with `q "EXPLAIN …"` first.
+- RO connections allow one statement starting with SELECT/SHOW/DESC/EXPLAIN/WITH/VALUES/TABLE (+PRAGMA on SQLite).
+- stderr `TRUNCATED` → narrow with WHERE or raise `--limit`. `--format json` for parsing, `vertical` for wide rows.
+- Big tables: filter on indexed columns; check `EXPLAIN` first.

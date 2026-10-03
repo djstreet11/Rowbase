@@ -1,16 +1,19 @@
 ---
 name: run-ui
-description: Launch and check the local web UI (ui.py + ui/) to see or verify frontend/API changes. Use when asked to run/open/screenshot the web UI or to verify a ui/ or ui.py change.
+description: Launch and verify the Rowbase local web UI (rowbase/server.py + rowbase/static/). Use when asked to run/open/screenshot the web UI or to verify a frontend or API change.
 ---
 
 # run-ui — start the Python web UI
 
-1. Ensure deps: `[ -x .venv/bin/python ] || (python3 -m venv .venv && .venv/bin/pip -q install pymysql)`
-2. Start in background (no auto browser): `.venv/bin/python ui.py --port 8765 --no-open` (run_in_background).
-3. Open `http://127.0.0.1:8765/` in the built-in browser pane (`preview_start` with url). Must be `127.0.0.1`/`localhost` —
-   other Host headers get 403. API calls need header `X-AWIS-UI: 1` (e.g. `curl -H 'X-AWIS-UI: 1' 127.0.0.1:8765/api/conns`).
-4. Without configured connections the UI loads but `/api/tables` errors — that's expected; see `db-query` skill for config.
-5. Static files are read on every request → edits to `ui/*` need only a page reload; `ui.py`/`db.py` edits need a restart.
-6. Verify with `read_page`/`get_page_text` + console errors (`read_console_messages`). Stop the server when done.
+1. Deps: `[ -x .venv/bin/rowbase ] || (python3 -m venv .venv && .venv/bin/pip -q install -e .)`
+2. Use the scratch store unless the user wants their real connections:
+   `ROWBASE_HOME=$PWD/.scratch-home ROWBASE_SECRETS=file .venv/bin/rowbase ui --port 8765 --no-open` (run_in_background).
+   Scratch store may need connections: see `db-query` (`rowbase add`); local MariaDB/Postgres DB `rowbase_test` is created by tests.
+3. Open `http://127.0.0.1:8765/` in the built-in browser (`preview_start` with url). Only `127.0.0.1`/`localhost` Host is
+   accepted; API needs header `X-Rowbase: 1` (`curl -H 'X-Rowbase: 1' 127.0.0.1:8765/api/conns`).
+4. Static files are read per request → `static/*` edits need only a reload; Python edits need a restart.
+5. Verify: `get_page_text`/`read_page`, `read_console_messages` (onlyErrors), click through: connection manager, table tab,
+   FK link, row drawer, console run, history. Check dark mode via `resize_window colorScheme`.
+6. Stop the server when done (`kill $(lsof -ti :8765)`).
 
-State in browser: `localStorage` keys `tabs`, `activeTab`, `conn`, `hide:<conn>:<table>`. History: `~/.config/awis-db/ui-history.jsonl`.
+Browser state: localStorage `tabs`, `activeTab`, `conn` (id), `hide:<connId>:<table>`. History: `$ROWBASE_HOME/history.jsonl`.
