@@ -206,57 +206,120 @@ def _p(desc, **extra):
     return {"type": "string", "description": desc, **extra}
 
 
-CONN = _p("Connection name (from `connections`)")
-DB = _p("Database name to use instead of the connection's default (optional)")
-FMT = {"type": "string", "enum": ["toon", "csv", "json", "md"], "description": "Result format (default from settings: toon)"}
-RO = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
+CONN = _p("Connection name exactly as returned by `connections` (e.g. \"shop\"). Unknown or unexposed names return an error.")
+DB = _p("Optional database to use instead of the connection's default (names from `databases`). Omit to use the default.")
+TABLE = _p("Table or view name as returned by `tables`. PostgreSQL tables outside `public` are written schema.table.")
+WHERE = _p("Optional SQL boolean expression WITHOUT the WHERE keyword, e.g. status = 'paid' AND total > 100.")
+FMT = {"type": "string", "enum": ["toon", "csv", "json", "md"],
+       "description": "Result format. Default from settings: toon (compact table: rows[N]{cols}: then one line per row)."}
+RO = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+ERRORS = " On failure returns isError with 'error: <reason>' (e.g. refused statement, unknown table, SQL error)."
 
+# Descriptions follow one shape: what it does → when to use it (and what to use instead) → what it returns → limits.
 TOOLS = {
-    "guide": (t_guide, "Read this first: Rowbase MCP knowledge base — workflow, safety rules, output format, dialect notes.",
+    "guide": (t_guide, "Guide",
+              "Read this first, once per session: the Rowbase knowledge base — recommended workflow, safety rules (read-only "
+              "model, one statement per call), the TOON output format and SQL dialect notes. Use it before any other tool; "
+              "it needs no connection. Returns a markdown document.",
               {}, [], "minimal"),
-    "connections": (t_connections, "List the user's database connections (name, driver, env, effective read-only/read-write mode).",
+    "connections": (t_connections, "List connections",
+                    "List the user's saved database connections exposed to MCP. Call this first to get the exact connection "
+                    "names every other tool requires. Returns a table connections[N]{name,driver,env,mode,database,tunnel} — "
+                    "mode is the EFFECTIVE read-only/read-write mode for MCP; env 'prod' means be extra careful — plus "
+                    "writes_enabled_in_mcp. No pagination: all exposed connections are returned.",
                     {}, [], "minimal"),
-    "databases": (t_databases, "List databases on the connection's server and the current one.", {"connection": CONN}, ["connection"], "full"),
-    "tables": (t_tables, "List tables and views (with approximate row counts) of a connection/database.",
-               {"connection": CONN, "database": DB, "filter": _p("Case-insensitive substring of the table name")}, ["connection"], "minimal"),
-    "describe": (t_describe, "Describe a table: columns (type, nullable, key, default, foreign key target, comment), indexes and tables referencing it.",
-                 {"connection": CONN, "database": DB, "table": _p("Table name (PostgreSQL: schema.table outside public)")},
-                 ["connection", "table"], "minimal"),
-    "search_schema": (t_search_schema, "Find tables/columns whose name (or MySQL column comment) contains a keyword.",
-                      {"connection": CONN, "database": DB, "text": _p("Keyword, e.g. invoice")}, ["connection", "text"], "full"),
-    "sample": (t_sample, "Return the first rows of a table, optionally filtered by a WHERE expression.",
-               {"connection": CONN, "database": DB, "table": _p("Table name"), "where": _p("SQL boolean expression without WHERE"),
-                "limit": {"type": "integer", "description": "Rows (default 20)"}, "format": FMT}, ["connection", "table"], "full"),
-    "count": (t_count, "Count rows of a table, optionally filtered by a WHERE expression.",
-              {"connection": CONN, "database": DB, "table": _p("Table name"), "where": _p("SQL boolean expression without WHERE")},
-              ["connection", "table"], "full"),
-    "query": (t_query, "Run ONE SQL statement (read-only unless writes are enabled). Auto-LIMIT applies; 'truncated: true' means more rows exist.",
-              {"connection": CONN, "database": DB, "sql": _p("A single SQL statement"),
-               "limit": {"type": "integer", "description": "Max rows (default 100, capped by settings)"}, "format": FMT},
+    "databases": (t_databases, "List databases",
+                  "List the databases on a connection's server and which one is current. Use it when a connection has no "
+                  "database selected, or to work in another database (pass `database` to later calls); to list tables inside "
+                  "a database use `tables` instead. Returns current, databases[N] (user databases first) and system[N]. "
+                  "SQLite returns an empty list (one file = one database)." + ERRORS,
+                  {"connection": CONN}, ["connection"], "full"),
+    "tables": (t_tables, "List tables",
+               "List all tables and views of a connection/database with approximate row counts — the entry point for browsing. "
+               "Use `search_schema` instead when you look for a concept (e.g. 'invoice') across table AND column names, and "
+               "`describe` once you know the table. Returns tables[N]{name,kind,approx_rows} (kind = table|view; approx_rows "
+               "is an estimate, may be null; use `count` for exact numbers). Returns every match, no pagination." + ERRORS,
+               {"connection": CONN, "database": DB, "filter": _p("Optional case-insensitive substring of the table name, e.g. order.")},
+               ["connection"], "minimal"),
+    "describe": (t_describe, "Describe table",
+                 "Show the structure of one known table: columns with type, nullability, key, default, foreign-key target "
+                 "(fk = table.column — use it to write JOINs) and comment, plus indexes and the tables that reference it. "
+                 "Use it before writing SQL against a table; use `search_schema` if you don't know the table name yet. "
+                 "Returns table, sql_name (properly quoted name for SQL), columns[N]{name,type,nullable,key,default,fk,comment}, "
+                 "indexes[N]{name,unique,columns} and referenced_by[N]{table,column,ref_column}." + ERRORS,
+                 {"connection": CONN, "database": DB, "table": TABLE}, ["connection", "table"], "minimal"),
+    "search_schema": (t_search_schema, "Search schema",
+                      "Find tables and columns whose name contains a keyword (case-insensitive substring; on MySQL also column "
+                      "comments). Use it when you know WHAT you are looking for but not WHERE it is stored; use `tables` instead to "
+                      "browse everything and `describe` for one known table. Returns matches[N]{table,column,type}, one row "
+                      "per matching column (a table-name match lists all its columns), capped at 500 rows (truncated: true "
+                      "when cut)." + ERRORS,
+                      {"connection": CONN, "database": DB, "text": _p("Keyword to look for, e.g. invoice, email, price.")},
+                      ["connection", "text"], "full"),
+    "sample": (t_sample, "Sample rows",
+               "Peek at a few real rows of one table (SELECT * … LIMIT n, in storage order, no sorting) to see what the data "
+               "looks like before writing a query. Use `query` instead for specific columns, joins, sorting or aggregates, "
+               "and `count` when you only need a number. Returns rows[N]{all columns} plus rows, truncated (true = more rows "
+               "exist) and ms. Default 20 rows, capped by the server's max rows setting." + ERRORS,
+               {"connection": CONN, "database": DB, "table": TABLE, "where": WHERE,
+                "limit": {"type": "integer", "minimum": 1, "description": "Rows to return (default 20; capped by settings, usually 200)."},
+                "format": FMT}, ["connection", "table"], "full"),
+    "count": (t_count, "Count rows",
+              "Return the exact number of rows in a table, optionally filtered — use it to size a result before fetching it "
+              "or to answer 'how many' questions. Use `query` instead for grouped counts (GROUP BY) or counts over joins. "
+              "Returns a single line: count: N. May be slow on very large unindexed filters (timeout from settings)." + ERRORS,
+              {"connection": CONN, "database": DB, "table": TABLE, "where": WHERE}, ["connection", "table"], "full"),
+    "query": (t_query, "Run SQL",
+              "Run exactly ONE SQL statement — the general tool for answering questions: specific columns, JOINs (follow fk "
+              "from `describe`), filters, sorting, GROUP BY. Read-only connections accept only SELECT/SHOW/DESCRIBE/EXPLAIN/"
+              "WITH/VALUES/TABLE (+PRAGMA on SQLite); multiple statements are refused. Prefer `sample`/`count` for simple "
+              "peeks and totals, `explain` for performance. A LIMIT is added automatically when missing. Returns "
+              "rows[N]{columns} plus rows, truncated (true = more rows exist — narrow with WHERE or raise limit) and ms; "
+              "write statements (only if writes are enabled) return affected instead." + ERRORS,
+              {"connection": CONN, "database": DB, "sql": _p("A single SQL statement in the connection's dialect, without a trailing ';' chain."),
+               "limit": {"type": "integer", "minimum": 1, "description": "Max rows (default 100; capped by settings, usually 200)."},
+               "format": FMT},
               ["connection", "sql"], "minimal"),
-    "explain": (t_explain, "Show the execution plan of a SELECT (analyze=true executes it to get real timings).",
-                {"connection": CONN, "database": DB, "sql": _p("SELECT statement"), "analyze": {"type": "boolean"}},
+    "explain": (t_explain, "Explain query plan",
+                "Show how the database will execute a SELECT (its query plan) to diagnose slow queries or check index use — "
+                "use it instead of `query` when the question is about performance, not data. With analyze=true the statement "
+                "is actually executed to report real timings (can be slow on big tables). Returns the plan as rows plus a "
+                "hint: MySQL type=ALL or PostgreSQL 'Seq Scan' means a full table scan (consider an index or a narrower WHERE). "
+                "SQLite uses EXPLAIN QUERY PLAN." + ERRORS,
+                {"connection": CONN, "database": DB, "sql": _p("The SELECT statement to analyze (without EXPLAIN)."),
+                 "analyze": {"type": "boolean", "description": "true = execute the statement to measure real timings and row counts "
+                                                               "(EXPLAIN ANALYZE); default false = estimate only, nothing is executed."}},
                 ["connection", "sql"], "full"),
 }
-WRITE_TOOL = ("apply_changes", t_apply_changes,
-              "Change rows atomically by primary key. ALWAYS call with dry_run=true first and show the SQL to the user. "
-              "changes: [{op:'update', key:{pk:value}, set:{col:value|null}}, {op:'insert', values:{...}}, {op:'delete', key:{pk:value}}].",
-              {"connection": CONN, "database": DB, "table": _p("Table name"),
-               "changes": {"type": "array", "items": {"type": "object"}}, "dry_run": {"type": "boolean", "description": "Default true"}},
+WRITE_TOOL = ("apply_changes", t_apply_changes, "Apply row changes",
+              "Insert, update or delete rows by primary key in ONE atomic transaction — only available when the user enabled "
+              "writes for MCP, and only on write-enabled connections. ALWAYS call with dry_run=true first, show the generated "
+              "SQL to the user and get confirmation, then call again with dry_run=false. Every update/delete must hit exactly "
+              "one row, otherwise nothing is saved. Returns dry_run, statements[N] (the SQL) and affected[N]." + ERRORS,
+              {"connection": CONN, "database": DB, "table": TABLE,
+               "changes": {"type": "array", "description": "Row changes: {op:'update', key:{pk_col:value}, set:{col:value|null}}, "
+                                                           "{op:'insert', values:{col:value}}, {op:'delete', key:{pk_col:value}}. "
+                                                           "key must contain exactly the primary-key columns.",
+                           "items": {"type": "object"}},
+               "dry_run": {"type": "boolean", "description": "Default true: only return the SQL. Set false to apply after the user confirmed."}},
               ["connection", "table", "changes"])
 
 
 def tool_list():
     cfg = _settings()
     out = []
-    for name, (fn, desc, props, req, level) in TOOLS.items():
+    for name, (fn, title, desc, props, req, level) in TOOLS.items():
         if cfg["toolset"] == "minimal" and level != "minimal":
             continue
-        out.append({"name": name, "description": desc, "annotations": RO,
+        ann = RO
+        if name == "query" and cfg["allowWrites"]:  # can run writes on write-enabled connections → be truthful
+            ann = {**RO, "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False}
+        out.append({"name": name, "title": title, "description": desc, "annotations": {"title": title, **ann},
                     "inputSchema": {"type": "object", "properties": props, "required": req}})
     if cfg["allowWrites"]:
-        name, fn, desc, props, req = WRITE_TOOL
-        out.append({"name": name, "description": desc, "annotations": {"readOnlyHint": False, "destructiveHint": True},
+        name, fn, title, desc, props, req = WRITE_TOOL
+        out.append({"name": name, "title": title, "description": desc,
+                    "annotations": {"title": title, "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
                     "inputSchema": {"type": "object", "properties": props, "required": req}})
     return out
 

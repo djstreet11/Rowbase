@@ -62,6 +62,22 @@ class MCPTest(unittest.TestCase):
         self.assertIn("customer_id,INTEGER,yes,null,null,customers.id", self.text(desc))
         self.assertIn("customers,name,TEXT", self.text(search))
 
+    def test_tool_definitions_quality(self):
+        """Guards the TDQS-driven definitions: title, return shape, routing hints, documented params, truthful hints."""
+        (ro,) = self.session([{"method": "tools/list"}], settings={"allowWrites": False})
+        (rw,) = self.session([{"method": "tools/list"}], settings={"allowWrites": True})
+        for t in rw["result"]["tools"]:
+            with self.subTest(tool=t["name"]):
+                self.assertTrue(t.get("title"))
+                self.assertIn("Returns", t["description"])
+                for name, prop in t["inputSchema"]["properties"].items():
+                    self.assertTrue(prop.get("description"), f"{t['name']}.{name} lacks a description")
+        by = lambda r: {t["name"]: t for t in r["result"]["tools"]}
+        self.assertTrue(by(ro)["query"]["annotations"]["readOnlyHint"])
+        self.assertFalse(by(rw)["query"]["annotations"]["readOnlyHint"])
+        for name in ("sample", "count", "search_schema", "tables", "explain"):
+            self.assertIn("instead", by(ro)[name]["description"], f"{name} should route to its alternative")
+
     def test_writes_when_allowed(self):
         tools, dry, real, check = self.session([
             {"method": "tools/list"},

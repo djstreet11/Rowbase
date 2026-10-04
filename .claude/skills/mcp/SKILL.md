@@ -24,3 +24,6 @@ description: Work on or use Rowbase's MCP server (rowbase/mcp.py) — add/change
 - Glama (https://glama.ai/mcp/servers/djstreet11/Rowbase): build spec is configured on Glama's admin page, not from our Dockerfile —
   Build steps `["uv sync"]`, CMD `["mcp-proxy","--","uv","run","rowbase","mcp"]` (without `mcp` rowbase opens the web UI and checks hang),
   no env/placeholders needed. glama.json lists maintainers. Verified locally with their exact Dockerfile + mcp-proxy HTTP (2026-10-05).
+- Tool descriptions follow one shape (from Glama TDQS feedback 2026-10-05): what it does → when to use it and which sibling to use
+  INSTEAD → exact return shape (no output schema) → limits/errors. Every param has a description; tools have `title`;
+  `query` annotations flip to readOnlyHint=false when allowWrites. Guarded by test_tool_definitions_quality.
