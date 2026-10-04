@@ -11,7 +11,7 @@
   <div class="brand">Row<span>base</span></div>
   <select id="conn" title="Connection"></select><select id="db" title="Database" hidden></select>
   <span class="ro" id="connBadge" hidden></span>
-  <button id="connBtn" title="Manage connections">Connections</button>
+  <button id="aiBtn" title="Connect AI assistants (MCP)">AI / MCP</button><button id="connBtn" title="Manage connections">Connections</button>
   <div class="spacer"></div>
   <button id="newConsole" title="New SQL console">+ SQL</button>
   <button id="historyBtn" title="History of executed queries">History</button>
@@ -82,6 +82,33 @@
       </div>
     </form>
   </div>
+</dialog>
+
+<dialog id="aiDlg" class="ai">
+  <form method="dialog" class="ai-form">
+    <div class="cm-h"><b>AI assistants · MCP server</b><button class="ghost" value="close" title="Close (Esc)">✕</button></div>
+    <div class="ai-body">
+      <p class="muted">Rowbase includes an MCP server so assistants (Claude, Cursor, Codex, VS Code…) can explore and query your
+        connections. Copy the prompt below into your assistant — it registers the server, reads the built-in guide and creates a skill.</p>
+      <div class="ai-prompt"><pre id="aiPrompt" class="mono"></pre><button type="button" class="primary" id="aiCopy">Copy prompt</button></div>
+      <h3 class="sub">Settings</h3>
+      <label class="chk2"><input type="checkbox" id="aiWrites"> Allow writes (only on connections that are write-enabled; changes are previewed first)</label>
+      <div class="cm-warn" id="aiWarn" hidden>Assistants will be able to change data on write-enabled connections (always via a previewed, atomic change set).</div>
+      <div class="fr2">
+        <label class="fr"><span>Result format</span><select id="aiFormat"><option value="toon">TOON (fewest tokens)</option><option value="csv">CSV</option><option value="md">Markdown</option><option value="json">JSON</option></select></label>
+        <label class="fr"><span>Tool set</span><select id="aiToolset"><option value="full">Full (10 tools)</option><option value="minimal">Minimal (5 tools)</option></select></label>
+      </div>
+      <div class="fr2">
+        <label class="fr"><span>Max rows per call</span><input id="aiRows" type="number" min="1" max="5000"></label>
+        <label class="fr"><span>Timeout, s</span><input id="aiTimeout" type="number" min="1" max="600"></label>
+      </div>
+      <div class="fr"><span>Connections exposed to MCP</span><div id="aiConns" class="ai-conns"></div></div>
+      <h3 class="sub">Manual setup</h3>
+      <div class="seg" id="aiClients"><button type="button" data-k="claude_code" class="on">Claude Code</button><button type="button" data-k="claude_desktop">Claude Desktop</button><button type="button" data-k="cursor">Cursor</button><button type="button" data-k="vscode">VS Code</button><button type="button" data-k="codex">Codex</button></div>
+      <div class="ai-prompt"><pre id="aiSnippet" class="mono"></pre><button type="button" id="aiCopySnippet">Copy</button></div>
+    </div>
+    <div class="cm-foot"><span class="cm-res" id="aiRes"></span><span class="spacer"></span><button type="button" class="primary" id="aiSave">Save settings</button></div>
+  </form>
 </dialog>
 
 <template id="tplTable">

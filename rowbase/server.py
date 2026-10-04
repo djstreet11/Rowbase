@@ -206,6 +206,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tables": lambda: cached(("tables", *ref(p["conn"], p.get("db"))), lambda: engine.tables(conn_for(p["conn"], p.get("db")))),
             "/api/table": lambda: cached(("table", *ref(p["conn"], p.get("db")), p["name"]),
                                          lambda: engine.table_info(conn_for(p["conn"], p.get("db")), p["name"])),
+            "/api/settings": store.settings,
+            "/api/mcp/config": lambda: __import__("rowbase.mcp", fromlist=["mcp"]).client_config(),
             "/api/history": lambda: history_read(int(p.get("limit") or 500), p.get("conn") and ref(p["conn"])[0]),
         }
         if url.path in routes:
@@ -239,6 +241,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/conns/delete": lambda: conn_delete(body),
             "/api/conns/test": lambda: conn_test(body),
             "/api/edit": lambda: run_edit(body),
+            "/api/settings": lambda: store.save_settings(body),
             "/api/refresh": lambda: drop_cache(body.get("conn")) or {"ok": True},
         }
         if url.path in routes:

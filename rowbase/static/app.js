@@ -1114,9 +1114,48 @@ async function cmDelete() {
   } catch (e) { cmSay(e.message, false); }
 }
 
+// ------------------------------------------------------------------ AI / MCP
+
+let aiCfg = null;
+async function openAI() {
+  const [st, cfg] = await Promise.all([api('/api/settings'), api('/api/mcp/config')]).catch(e => { toast(e.message); return []; });
+  if (!st) return;
+  aiCfg = cfg;
+  const m = st.mcp;
+  $('#aiPrompt').textContent = cfg.prompt;
+  $('#aiWrites').checked = m.allowWrites; $('#aiWarn').hidden = !m.allowWrites;
+  $('#aiFormat').value = m.format; $('#aiToolset').value = m.toolset; $('#aiRows').value = m.maxRows; $('#aiTimeout').value = m.timeout;
+  const all = m.connections === '*';
+  $('#aiConns').innerHTML = `<label class="chk2"><input type="checkbox" data-all ${all ? 'checked' : ''}> All connections</label>` +
+    App.conns.map(c => `<label class="chk2"><input type="checkbox" data-c="${esc(c.name)}" ${all || m.connections.includes(c.name) || m.connections.includes(c.id) ? 'checked' : ''} ${all ? 'disabled' : ''}> ${esc(connLabel(c))} <small>${esc(c.driver)}${c.readOnly ? '' : ' · <span class="rw">read-write</span>'}</small></label>`).join('');
+  showSnippet('claude_code');
+  $('#aiRes').textContent = '';
+  $('#aiDlg').showModal();
+}
+function showSnippet(k) {
+  $$('#aiClients button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  $('#aiSnippet').textContent = aiCfg[k];
+}
+async function saveAI() {
+  const all = $('#aiConns [data-all]').checked;
+  const mcp = {allowWrites: $('#aiWrites').checked, format: $('#aiFormat').value, toolset: $('#aiToolset').value,
+    maxRows: +$('#aiRows').value || 200, timeout: +$('#aiTimeout').value || 30,
+    connections: all ? '*' : $$('#aiConns [data-c]').filter(x => x.checked).map(x => x.dataset.c)};
+  try { await api('/api/settings', {mcp}); $('#aiRes').className = 'cm-res ok'; $('#aiRes').textContent = 'Saved · assistants pick it up on the next call'; }
+  catch (e) { $('#aiRes').className = 'cm-res err'; $('#aiRes').textContent = e.message; }
+}
+const copyText = (text, what) => navigator.clipboard.writeText(text).then(() => toast(`${what} copied`, true), () => toast('Copy failed'));
+
 // ------------------------------------------------------------------ wiring
 
 $('#conn').onchange = e => switchConn(e.target.value);
+$('#aiBtn').onclick = openAI;
+$('#aiCopy').onclick = () => copyText($('#aiPrompt').textContent, 'Prompt');
+$('#aiCopySnippet').onclick = () => copyText($('#aiSnippet').textContent, 'Snippet');
+$('#aiClients').onclick = e => { const b = e.target.closest('[data-k]'); if (b) showSnippet(b.dataset.k); };
+$('#aiSave').onclick = saveAI;
+$('#aiWrites').onchange = e => ($('#aiWarn').hidden = !e.target.checked);
+$('#aiConns').onchange = e => { if (e.target.matches('[data-all]')) $$('#aiConns [data-c]').forEach(x => { x.disabled = e.target.checked; if (e.target.checked) x.checked = true; }); };
 $('#db').onchange = e => {
   const base = baseId(App.conn), c = connOf(base), db = e.target.value === (c.database || '') ? null : e.target.value;
   store.set('db:' + base, db);

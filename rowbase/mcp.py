@@ -382,7 +382,8 @@ def launcher():
     if getattr(sys, "frozen", False) or "__compiled__" in globals():
         return [os.path.abspath(sys.executable if getattr(sys, "frozen", False) else exe), "mcp"]
     import shutil
-    found = shutil.which("rowbase")
+    sibling = os.path.join(os.path.dirname(sys.executable), "rowbase" + (".exe" if os.name == "nt" else ""))
+    found = sibling if os.path.exists(sibling) else shutil.which("rowbase")
     if found:
         return [found, "mcp"]
     return [sys.executable, "-m", "rowbase", "mcp"]
