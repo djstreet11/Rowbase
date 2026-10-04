@@ -132,6 +132,18 @@ class Base:
     def test_ping(self):
         self.assertTrue(engine.ping(self.ro)["version"])
 
+    def test_databases_and_switch(self):
+        d = engine.databases(self.ro)
+        if self.driver == "sqlite":
+            self.assertEqual(d["databases"], [])
+            return
+        self.assertIn("rowbase_test", d["databases"])
+        self.assertEqual(d["current"], "rowbase_test")
+        sys_dbs = [n for n in d["databases"] if n in engine.SYSTEM_DATABASES]
+        self.assertEqual(d["databases"][-len(sys_dbs):] if sys_dbs else [], sys_dbs)  # system dbs listed last
+        other = "information_schema" if self.driver == "mysql" else "postgres"
+        self.assertEqual(engine.databases(engine.with_database(self.ro, other))["current"], other)
+
 
 class SQLiteTest(Base, unittest.TestCase):
     driver, orders = "sqlite", "orders"

@@ -58,6 +58,12 @@ class MySQL:
     def version_sql(self):
         return "SELECT VERSION()"
 
+    def databases_sql(self):
+        return "SHOW DATABASES"
+
+    def current_db_sql(self):
+        return "SELECT DATABASE()"
+
     def tables_sql(self):
         return ("SELECT TABLE_NAME, TABLE_ROWS, CASE WHEN TABLE_TYPE LIKE '%VIEW%' THEN 'view' ELSE 'table' END "
                 "FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME")
@@ -124,6 +130,12 @@ class Postgres:
 
     def version_sql(self):
         return "SELECT version()"
+
+    def databases_sql(self):
+        return "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY 1"
+
+    def current_db_sql(self):
+        return "SELECT current_database()"
 
     _NAME = "CASE WHEN {n}.nspname = 'public' THEN {c}.relname ELSE {n}.nspname || '.' || {c}.relname END"
 
@@ -198,6 +210,12 @@ class SQLite:
 
     def version_sql(self):
         return "SELECT 'SQLite ' || sqlite_version()"
+
+    def databases_sql(self):
+        return None  # one file = one database
+
+    def current_db_sql(self):
+        return "SELECT 'main'"
 
     def tables_sql(self):
         return "SELECT name, NULL, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name"

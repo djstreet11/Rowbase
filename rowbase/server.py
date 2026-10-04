@@ -30,7 +30,19 @@ def cached(key, fn):
     return value
 
 
+def ref(key, db=None):
+    """UI connection key '<id>' or '<id>::<database>' (database override) -> (id, db)."""
+    cid, _, kdb = str(key).partition("::")
+    return cid, (db or kdb or None)
+
+
+def conn_for(key, db=None):
+    cid, db = ref(key, db)
+    return engine.with_database(cid, db)
+
+
 def drop_cache(conn_id=None):
+    conn_id = conn_id and ref(conn_id)[0]
     with _lock:
         for k in [k for k in _cache if conn_id is None or k[1] == conn_id]:
             del _cache[k]
@@ -99,11 +111,14 @@ def conn_test(body):
 
 
 def run_query(body):
-    c = store.get(body["conn"])
+    cid, db = ref(body["conn"], body.get("db"))
+    c = store.get(cid)
     limit = max(1, min(int(body.get("limit") or 100), 5000))
-    entry = {"conn": c["id"], "connName": c["name"], "sql": body["sql"], "source": body.get("source", "")}
+    entry = {"conn": c["id"], "connName": c["name"], "sql": body["sql"], "source": body.get("source", ""),
+             **({"db": db} if db else {})}
     try:
-        res = engine.execute(c["id"], body["sql"], limit=limit, timeout=int(body.get("timeout") or 30), pooled=True)
+        res = engine.execute(engine.with_database(c["id"], db), body["sql"], limit=limit,
+                             timeout=int(body.get("timeout") or 30), pooled=True)
     except QueryError as e:
         if body.get("history", True):
             history_add({**entry, "error": str(e)})
@@ -156,9 +171,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, f.read(), STATIC_TYPES[name] + "; charset=utf-8")
         routes = {
             "/api/conns": conns_list,
-            "/api/tables": lambda: cached(("tables", p["conn"]), lambda: engine.tables(p["conn"])),
-            "/api/table": lambda: cached(("table", p["conn"], p["name"]), lambda: engine.table_info(p["conn"], p["name"])),
-            "/api/history": lambda: history_read(int(p.get("limit") or 500), p.get("conn")),
+            "/api/databases": lambda: engine.databases(conn_for(p["conn"], p.get("db"))),
+            "/api/tables": lambda: cached(("tables", *ref(p["conn"], p.get("db"))), lambda: engine.tables(conn_for(p["conn"], p.get("db")))),
+            "/api/table": lambda: cached(("table", *ref(p["conn"], p.get("db")), p["name"]),
+                                         lambda: engine.table_info(conn_for(p["conn"], p.get("db")), p["name"])),
+            "/api/history": lambda: history_read(int(p.get("limit") or 500), p.get("conn") and ref(p["conn"])[0]),
         }
         if url.path in routes:
             return self.handle_api(routes[url.path])

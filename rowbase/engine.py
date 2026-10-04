@@ -203,6 +203,27 @@ def ping(conn):
     return {"version": r["rows"][0][0], "elapsed": r["elapsed"]}
 
 
+SYSTEM_DATABASES = {"information_schema", "mysql", "performance_schema", "sys", "postgres"}
+
+
+def databases(conn, pooled=True):
+    """{databases: [...user dbs, ...system dbs], current: name|None} — empty list for SQLite."""
+    drv = dialect(conn)
+    sql = drv.databases_sql()
+    names = [r[0] for r in _meta(conn, sql, pooled)] if sql else []
+    names.sort(key=lambda n: (n in SYSTEM_DATABASES, n))
+    cur = execute(conn, drv.current_db_sql(), limit=1, timeout=10, pooled=pooled, trusted=True)["rows"]
+    return {"databases": names, "current": cur[0][0] if cur else None, "system": sorted(SYSTEM_DATABASES & set(names))}
+
+
+def with_database(conn, db):
+    """Connection dict with a database override (pool key changes, stored password still used via id)."""
+    if not db:
+        return conn
+    c, _ = resolve(conn)
+    return {**c, "database": db}
+
+
 def tables(conn, pooled=True):
     return [{"name": r[0], "rows": int(r[1]) if r[1] is not None else None, "kind": r[2]} for r in _meta(conn, dialect(conn).tables_sql(), pooled)]
 

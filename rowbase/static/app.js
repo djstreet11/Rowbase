@@ -53,10 +53,11 @@ const Schema = {
     return this.meta[k];
   },
   sync(conn, name) { return this.metaSync[conn + '|' + name]; },
-  clear(conn) {
+  clear(conn) {  // clears every database of that connection
     if (!conn) { this.tables = {}; this.meta = {}; this.metaSync = {}; return; }
-    delete this.tables[conn];
-    for (const m of [this.meta, this.metaSync]) for (const k of Object.keys(m)) if (k.startsWith(conn + '|')) delete m[k];
+    const b = baseId(conn);
+    for (const k of Object.keys(this.tables)) if (baseId(k) === b) delete this.tables[k];
+    for (const m of [this.meta, this.metaSync]) for (const k of Object.keys(m)) if (baseId(k.split('|')[0]) === b) delete m[k];
   },
 };
 const enumValues = type => {
@@ -263,7 +264,13 @@ function valueItems(before, columns, quoted) {
 // ------------------------------------------------------------------ app state & tabs
 
 const App = {conn: null, conns: [], tabs: [], active: null, seq: 1};
-const connOf = id => App.conns.find(c => c.id === id);
+// Connection keys: '<id>' or '<id>::<database>' (database chosen in the header overrides the connection's default).
+// Caches, tabs and API calls use the full key, so everything is database-aware; the server splits it.
+const baseId = k => String(k || '').split('::')[0];
+const dbOf = k => String(k || '').split('::')[1] || null;
+const keyOf = (id, db) => (db ? `${id}::${db}` : id);
+const connOf = id => App.conns.find(c => c.id === baseId(id));
+const needsDatabase = () => { const c = curConn(); return !!c && c.driver === 'mysql' && !c.database && !dbOf(App.conn); };
 const curConn = () => connOf(App.conn);
 const driverOf = id => connOf(id)?.driver || 'mysql';
 const connLabel = c => c.name + (c.env ? ` [${c.env}]` : '');
@@ -320,7 +327,7 @@ function tabTitle(t) {
 
 function renderTabbar() {
   $('#tabbar').innerHTML = App.tabs.map(t => `<div class="tab${t.id === App.active ? ' on' : ''}" data-id="${t.id}" title="${esc(t.type === 'table' ? (t.table + (t.where ? '\nWHERE ' + t.where : '')) : t.title)}">
-      <span class="ic">${t.type === 'console' ? 'SQL' : '▦'}</span><span class="tt">${esc(tabTitle(t))}</span>${t.conn !== App.conn ? `<span class="ic">${esc(connOf(t.conn)?.name || '?')}</span>` : ''}<button class="x" title="Close (middle click)">×</button></div>`).join('');
+      <span class="ic">${t.type === 'console' ? 'SQL' : '▦'}</span><span class="tt">${esc(tabTitle(t))}</span>${t.conn !== App.conn ? `<span class="ic">${esc([connOf(t.conn)?.name || '?', dbOf(t.conn)].filter(Boolean).join(' · '))}</span>` : ''}<button class="x" title="Close (middle click)">×</button></div>`).join('');
   $('#tabbar .tab.on')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
 }
 
@@ -340,7 +347,7 @@ function activate(id) {
 
 function showStatus(t) {
   const c = t ? connOf(t.conn) : curConn();
-  $('#stConn').textContent = c ? `${c.name} · ${c.driver}` : '';
+  $('#stConn').textContent = c ? [c.name, dbOf(t ? t.conn : App.conn) || c.database, c.driver].filter(Boolean).join(' · ') : '';
   if (t?.res) status(t.res.affected != null ? `${plural(t.res.affected, 'row')} affected · ${t.res.elapsed.toFixed(2)} s` : `${plural(t.res.rows.length, 'row')} · ${t.res.elapsed.toFixed(2)} s`,
     t.res.truncated ? `truncated to ${t.lastLimit} — add a WHERE or raise the limit` : '');
   else status('—');
@@ -776,6 +783,7 @@ function renderHistory() {
 let tablesList = [];
 function renderTables() {
   const f = $('#tableFilter').value.trim().toLowerCase(), k = $('#kindFilter').value;
+  if (needsDatabase()) { $('#tableList').innerHTML = '<div class="empty">Choose a database above ↑</div>'; return; }
   const list = tablesList.filter(t => (k === 'all' || (t.kind === 'view') === (k === 'view')) && (!f || t.name.toLowerCase().includes(f)));
   $('#tableList').innerHTML = list.slice(0, 800).map(t => `<div class="t${t.kind === 'view' ? ' view' : ''}" data-t="${esc(t.name)}"><b>${esc(t.name)}</b><i>${t.kind === 'view' ? 'view' : t.rows != null ? fmtN(t.rows) : ''}</i></div>`).join('')
     + (list.length > 800 ? `<div class="empty">${list.length - 800} more… refine the search</div>` : '');
@@ -793,7 +801,7 @@ function renderConnSelect() {
   App.conns.forEach(c => (c.group ? (groups[c.group] ||= []) : none).push(c));
   const opt = c => `<option value="${esc(c.id)}">${esc(connLabel(c))}</option>`;
   $('#conn').innerHTML = none.map(opt).join('') + Object.entries(groups).map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(opt).join('')}</optgroup>`).join('');
-  $('#conn').value = App.conn || '';
+  $('#conn').value = baseId(App.conn);
   $('#conn').hidden = !App.conns.length;
 }
 function renderConnBadge() {
@@ -809,16 +817,36 @@ function renderWelcome() {
     : '<h2>Welcome to Row<span>base</span></h2><p>A small local client for MySQL, PostgreSQL and SQLite.<br>Add a connection to get started.</p><button class="primary" data-add>Add your first connection</button>';
 }
 async function switchConn(id) {
-  App.conn = id;
-  store.set('conn', id);
+  const base = baseId(id) || null;
+  App.conn = base && keyOf(base, dbOf(id) || store.get('db:' + base, null));
+  store.set('conn', base);
   renderConnSelect(); renderConnBadge(); renderTabbar(); showStatus(activeTab());
-  if (!id) { tablesList = []; renderTables(); return; }
+  if (!id) { tablesList = []; renderTables(); renderDbSelect(); return; }
+  renderDbSelect();
+  if (needsDatabase()) { tablesList = []; renderTables(); status('Choose a database'); return; }
   status('Loading tables…');
   try {
-    tablesList = await Schema.loadTables(id);
+    tablesList = await Schema.loadTables(App.conn);
     renderTables();
     status(tablesList.length + ' tables');
   } catch (e) { tablesList = []; renderTables(); toast(e.message); status('Connection error'); }
+}
+/** Database picker next to the connection: server databases; picking one overrides the connection's default. */
+async function renderDbSelect() {
+  const sel = $('#db'), c = curConn(), key = App.conn;
+  sel.hidden = !c || c.driver === 'sqlite';
+  if (sel.hidden) return;
+  sel.innerHTML = `<option>${esc(dbOf(key) || c.database || '…')}</option>`;
+  let d;
+  try { d = await api('/api/databases?conn=' + enc(key)); } catch (e) { return; }
+  if (key !== App.conn) return;
+  const cur = dbOf(key) || d.current || '';
+  const opt = n => `<option value="${esc(n)}">${esc(n)}${n === c.database ? ' (default)' : ''}</option>`;
+  const user = d.databases.filter(n => !d.system.includes(n)), sys = d.databases.filter(n => d.system.includes(n));
+  sel.innerHTML = (cur ? '' : '<option value="" selected disabled>Choose database…</option>') + user.map(opt).join('')
+    + (sys.length ? `<optgroup label="System">${sys.map(opt).join('')}</optgroup>` : '');
+  sel.value = cur;
+  sel.classList.toggle('need', !cur);
 }
 async function loadConns(selectId) {
   App.conns = await api('/api/conns');
@@ -937,6 +965,11 @@ async function cmDelete() {
 // ------------------------------------------------------------------ wiring
 
 $('#conn').onchange = e => switchConn(e.target.value);
+$('#db').onchange = e => {
+  const base = baseId(App.conn), c = connOf(base), db = e.target.value === (c.database || '') ? null : e.target.value;
+  store.set('db:' + base, db);
+  switchConn(keyOf(base, db));
+};
 $('#tableFilter').oninput = renderTables;
 $('#kindFilter').onchange = renderTables;
 $('#connBtn').onclick = () => openManager();
@@ -971,7 +1004,7 @@ $('#historyBtn').onclick = openHistory;
 $('#histClose').onclick = () => closeDrawer('#histDrawer');
 $('#histFilter').oninput = renderHistory;
 $('#histErrors').onchange = renderHistory;
-$('#histBody').onclick = e => { const d = e.target.closest('[data-i]'); if (d) { const h = histData[+d.dataset.i]; closeDrawer('#histDrawer'); openConsole(h.sql, {conn: connOf(h.conn) ? h.conn : App.conn}); } };
+$('#histBody').onclick = e => { const d = e.target.closest('[data-i]'); if (d) { const h = histData[+d.dataset.i]; closeDrawer('#histDrawer'); openConsole(h.sql, {conn: connOf(h.conn) ? keyOf(h.conn, h.db) : App.conn}); } };
 $('#rowClose').onclick = () => closeDrawer('#rowDrawer');
 $('#rowFilter').oninput = renderRow;
 $('#rowBody').onclick = e => {
