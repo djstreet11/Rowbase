@@ -22,6 +22,12 @@ final class AppState {
         didSet { UserDefaults.standard.set(selectedConnectionID, forKey: "rowbase.selectedConnection") }
     }
     var tables: [TableEntry] = []
+    var databases: [String] = []        // server databases of the selected connection (empty for SQLite)
+    var currentDatabase: String?        // what the session actually uses (nil: MySQL connection without a database)
+    /// Per-connection database chosen in the sidebar, overriding the connection's configured one (UI state, not saved to connections.json).
+    var databaseOverride: [String: String] = UserDefaults.standard.dictionary(forKey: "rowbase.databaseOverride") as? [String: String] ?? [:] {
+        didSet { UserDefaults.standard.set(databaseOverride, forKey: "rowbase.databaseOverride") }
+    }
     var tablesLoading = false
     var tableFilter = ""
     var tabs: [WorkTab] = []
@@ -44,7 +50,23 @@ final class AppState {
         selectedConnectionID = UserDefaults.standard.string(forKey: "rowbase.selectedConnection")
     }
 
-    var selectedConnection: Connection? { connections.first { $0.id == selectedConnectionID } }
+    /// Selected connection with the sidebar's database choice applied — everything opened from the sidebar uses this.
+    var selectedConnection: Connection? {
+        guard var c = connections.first(where: { $0.id == selectedConnectionID }) else { return nil }
+        if let db = databaseOverride[c.id] { c.database = db }
+        return c
+    }
+
+    /// MySQL connection with no database configured or chosen: tables can't be listed until one is picked.
+    var needsDatabase: Bool { selectedConnection.map { $0.dialect == .mysql && ($0.database ?? "").isEmpty } ?? false }
+
+    func selectDatabase(_ db: String?) {
+        guard let base = connections.first(where: { $0.id == selectedConnectionID }) else { return }
+        databaseOverride[base.id] = (db == nil || db == base.database) ? nil : db
+        tables = []
+        status = ""
+        Task { await loadTables() }
+    }
     var activeTab: WorkTab? { tabs.first { $0.id == activeTabID } }
     var filteredTables: [TableEntry] {
         let f = tableFilter.trimmingCharacters(in: .whitespaces)
@@ -63,7 +85,9 @@ final class AppState {
 
     func loadConnections() {
         do { connections = try store.load() } catch { status = error.localizedDescription }
-        for t in tabs { if let c = connections.first(where: { $0.id == t.connection.id }) { t.connection = c } }
+        for t in tabs {  // refresh edited connection settings but keep the database each tab was opened on
+            if var c = connections.first(where: { $0.id == t.connection.id }) { c.database = t.connection.database ?? c.database; t.connection = c }
+        }
         if selectedConnection == nil { selectedConnectionID = connections.first?.id }
     }
 
@@ -71,18 +95,27 @@ final class AppState {
         guard id != selectedConnectionID else { return }
         selectedConnectionID = id
         tables = []
+        status = ""  // errors belong to the previous connection
         Task { await loadTables() }
     }
 
     func loadTables() async {
-        guard let conn = selectedConnection else { tables = []; return }
+        guard let conn = selectedConnection else { tables = []; databases = []; currentDatabase = nil; return }
         tablesLoading = true
         defer { tablesLoading = false }
+        if conn.dialect != .sqlite {
+            let dbs = (try? await engine.databases(conn)) ?? []
+            let cur = try? await engine.currentDatabase(conn)
+            guard selectedConnection == conn else { return }
+            databases = dbs.sorted { (Catalog.systemDatabases.contains($0) ? 1 : 0, $0) < (Catalog.systemDatabases.contains($1) ? 1 : 0, $1) }
+            currentDatabase = cur ?? nil
+        } else { databases = []; currentDatabase = nil }
+        if needsDatabase { tables = []; status = ""; return }
         do {
             let t = try await engine.tables(conn)
-            if selectedConnectionID == conn.id { tables = t; status = "" }
+            if selectedConnection == conn { tables = t; status = "" }
         } catch {
-            if selectedConnectionID == conn.id { tables = []; status = "Could not load tables: \(error.localizedDescription)" }
+            if selectedConnection == conn { tables = []; status = "Could not load tables: \(error.localizedDescription)" }
         }
     }
 
@@ -107,7 +140,7 @@ final class AppState {
     }
 
     func tableInfo(for conn: Connection, table: String) async throws -> TableInfo {
-        let key = "\(conn.id)|\(table)"
+        let key = "\(conn.id)|\(conn.database ?? "")|\(table)"  // same table name can exist in several databases
         if let i = infoCache[key] { return i }
         let i = try await engine.tableInfo(conn, table)
         infoCache[key] = i
@@ -126,7 +159,7 @@ final class AppState {
 
     func openTable(_ name: String, where w: String = "", chain: [Crumb] = [], connection: Connection? = nil) {
         guard let conn = connection ?? selectedConnection else { return }
-        if let t = tabs.first(where: { $0.connection.id == conn.id && $0.kind == .table(name) && $0.whereText == w }) {
+        if let t = tabs.first(where: { $0.connection.id == conn.id && $0.connection.database == conn.database && $0.kind == .table(name) && $0.whereText == w }) {
             activeTabID = t.id
             return
         }
@@ -323,6 +356,10 @@ final class AppState {
         if let w = NSApp.windows.first(where: { $0.canBecomeMain }) {
             w.setContentSize(NSSize(width: 1280, height: 800))
             w.center()
+        }
+        if let db = env["ROWBASE_SNAPSHOT_DB"], !db.isEmpty {
+            selectDatabase(db)
+            try? await Task.sleep(for: .milliseconds(800))
         }
         if let t = env["ROWBASE_SNAPSHOT_TABLE"], !t.isEmpty { openTable(t) }
         if let sql = env["ROWBASE_SNAPSHOT_SQL"], !sql.isEmpty, let tab = openQuery(sql: sql) { run(tab) }

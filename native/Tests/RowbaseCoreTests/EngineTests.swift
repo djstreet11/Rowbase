@@ -118,6 +118,22 @@ enum Fixture {
         #expect(try await e.tableInfo(ro, users).referencedBy == [Reference(table: orders, column: "user_id", refColumn: "id")])
         await #expect(throws: RowbaseError.self) { try await e.tableInfo(ro, "nope") }
         #expect(!(try await e.ping(ro)).isEmpty)
+        // database listing / switching (the picker for connections without a database)
+        if d != .sqlite {
+            let dbs = try await e.databases(ro)
+            let expected = d == .mysql ? "rowbase_swift" : "rowbase_test"
+            #expect(dbs.contains(expected), "\(d): \(dbs)")
+            #expect(try await e.currentDatabase(ro) == expected)
+            var none = ro; none.database = nil; none.name = "nodb"
+            if d == .mysql {
+                #expect(try await e.currentDatabase(none) == nil)
+                #expect(try await e.tables(none).isEmpty)
+            }
+            var switched = none; switched.database = expected
+            #expect(try await e.tables(switched).contains { $0.name == orders })
+        } else {
+            #expect(try await e.databases(ro).isEmpty)
+        }
 
         if d == .postgres {
             let n = try await e.execute(ro, "SELECT 7::numeric(10,2), -0.05::numeric(6,3), 12345678.9::numeric, 0::numeric, 'NaN'::numeric, 10000::numeric(8,1)")

@@ -118,8 +118,12 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
   (incl. data-modifying WITH / EXPLAIN ANALYZE), prod accent bar, history (same JSONL as Python), copy TSV/JSON.
   Since 2026-10-04: flat NSSplitView layout (closable sidebar ⌥⌘S / inspector ⌘I / Esc), schema-aware autocomplete popup,
   query cancel (Stop / ⌘.), SSH tunnels, psql-like date/time formatting.
+  Database switcher in the sidebar (lists server databases; required for MySQL connections without a database;
+  choice remembered per connection as UI state, not written to connections.json).
 - **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
-- **Gaps**: no inline editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
+- **Gaps vs web UI**: transpose view, column picker (hide columns), WHERE/ORDER BY autocomplete in table tabs, EXPLAIN ANALYZE
+  button, tabs restored on relaunch, tables/views filter, history "errors only", MySQL EXPLAIN highlighting.
+- **Gaps (both)**: no inline editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
   (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
 - **Distribution (later)**: Developer ID + notarization, Sparkle. App Store not planned (sandbox vs shared store/SSH).
 

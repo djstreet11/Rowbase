@@ -102,6 +102,17 @@ public actor Engine {
         return r.rows.first?.first.flatMap { $0 } ?? "?"
     }
 
+    /// Databases on the server (empty for SQLite).
+    public func databases(_ c: Connection) async throws -> [String] {
+        guard let sql = Catalog.databases(c.dialect) else { return [] }
+        return try await meta(c, sql).compactMap { $0.first ?? nil }
+    }
+
+    /// Database the session actually uses (nil when a MySQL connection has none selected).
+    public func currentDatabase(_ c: Connection) async throws -> String? {
+        try await execute(c, Catalog.currentDatabase(c.dialect), limit: 1, timeout: 10, trusted: true).rows.first?.first ?? nil
+    }
+
     public func tables(_ c: Connection) async throws -> [TableEntry] {
         try await meta(c, Catalog.tables(c.dialect)).map { TableEntry(name: $0[0] ?? "", rows: $0[1].flatMap { Int($0) }, isView: $0[2] == "view") }
     }

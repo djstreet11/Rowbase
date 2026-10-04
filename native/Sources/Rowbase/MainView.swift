@@ -115,7 +115,7 @@ struct StatusBar: View {
             Spacer()
             if let c = state.activeTab?.connection ?? state.selectedConnection {
                 ConnDot(color: c.color, size: 7)
-                Text("\(c.name) · \(c.dialect.title)").foregroundStyle(.secondary)
+                Text([c.name, c.dialect == .sqlite ? nil : c.database, c.dialect.title].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
             }
         }
         .font(.caption)

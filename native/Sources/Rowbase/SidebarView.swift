@@ -11,7 +11,7 @@ struct SidebarView: View {
                 emptyState
             } else {
                 header
-                tableList
+                if state.needsDatabase { databaseChooser } else { tableList }
             }
             Divider()
             HStack {
@@ -60,6 +60,7 @@ struct SidebarView: View {
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden)
 
+            if let c = state.selectedConnection, c.dialect != .sqlite { databaseMenu(c) }
             if let c = state.selectedConnection, !c.readOnly {
                 Label("READ-WRITE", systemImage: "pencil").font(.caption.weight(.bold)).foregroundStyle(.red)
             }
@@ -77,6 +78,63 @@ struct SidebarView: View {
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
         .padding(8)
+    }
+
+    /// Database switcher: lists server databases; the choice overrides the connection's configured database.
+    private func databaseMenu(_ c: Connection) -> some View {
+        let configured = state.connections.first { $0.id == c.id }?.database
+        let user = state.databases.filter { !Catalog.systemDatabases.contains($0) }
+        let system = state.databases.filter { Catalog.systemDatabases.contains($0) }
+        return Menu {
+            if let configured, !configured.isEmpty {
+                Button("Default (\(configured))") { state.selectDatabase(nil) }
+                Divider()
+            }
+            ForEach(user, id: \.self) { db in dbButton(db, current: c.database) }
+            if !system.isEmpty {
+                Section("System") { ForEach(system, id: \.self) { db in dbButton(db, current: c.database) } }
+            }
+            if state.databases.isEmpty { Text("No databases visible") }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "cylinder.split.1x2").foregroundStyle(.secondary).frame(width: 16)
+                Text(c.database ?? state.currentDatabase ?? "Choose database…")
+                    .foregroundStyle(state.needsDatabase ? Color.accentColor : .primary).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
+            }
+            .font(.callout).contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .help("Switch database")
+    }
+
+    private func dbButton(_ db: String, current: String?) -> some View {
+        Button { state.selectDatabase(db) } label: {
+            if db == current { Label(db, systemImage: "checkmark") } else { Text(db) }
+        }
+    }
+
+    /// Shown instead of the table list when a MySQL connection has no database yet.
+    private var databaseChooser: some View {
+        List {
+            Section("Choose a database") {
+                ForEach(state.databases, id: \.self) { db in
+                    Button { state.selectDatabase(db) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cylinder").foregroundStyle(.secondary).frame(width: 16)
+                            Text(db).foregroundStyle(Catalog.systemDatabases.contains(db) ? .secondary : .primary)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .overlay { if state.databases.isEmpty && !state.tablesLoading { Text("No databases visible").font(.caption).foregroundStyle(.secondary) } }
     }
 
     private var tableList: some View {

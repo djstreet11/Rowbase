@@ -37,7 +37,7 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - Layout is a flat AppKit NSSplitView (SplitLayout.swift): sidebar | detail | inspector, opaque panes, no materials.
   Don't reintroduce NavigationSplitView/.inspector (macOS 26 renders them as floating glass with shadows — user rejected it;
   also invisible to cacheDisplay snapshots). The window toolbar is NOT captured by snapshots — ask the user to check it.
-- Extra snapshot envs: `ROWBASE_SNAPSHOT_INSPECT=1` (inspector on row 0), `ROWBASE_SNAPSHOT_COMPLETE="sql…"` (autocomplete,
+- Extra snapshot envs: `ROWBASE_SNAPSHOT_DB=name` (switch database first), `ROWBASE_SNAPSHOT_INSPECT=1` (inspector on row 0), `ROWBASE_SNAPSHOT_COMPLETE="sql…"` (autocomplete,
   writes `-popup.png`).
 - Cancel: `Engine.execute(…, runID:)` + `Engine.cancel(runID)`; WorkTab.runID; ⌘. / Stop button.
 - SSH: `Connection.ssh` → TunnelManager (system ssh, ROWBASE_SSH override, tests use tests/fixtures/fake_ssh.py);
@@ -45,3 +45,6 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - Quote tables with `Dialect.ident`, columns with `Dialect.column` (PG ident adds `public.`).
 - Review checklist for delegated UI work: build, `swift test`, snapshots of table tab (PG + MySQL + SQLite), SQL tab, EXPLAIN,
   connections sheet; read AppState.run/confirm for safety.
+- Database override: `AppState.databaseOverride[connId]` (UserDefaults) applied in `selectedConnection`; table-info cache key
+  includes the database; tabs keep the database they were opened on.
+- Clear `state.status` on connection/database switch — otherwise errors from the previous connection linger.

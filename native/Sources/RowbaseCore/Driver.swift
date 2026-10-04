@@ -27,6 +27,26 @@ public enum Catalog {
         }
     }
 
+    /// Databases visible to the user (nil for SQLite: one file = one database).
+    public static func databases(_ d: Dialect) -> String? {
+        switch d {
+        case .mysql: "SHOW DATABASES"
+        case .postgres: "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY 1"
+        case .sqlite: nil
+        }
+    }
+
+    public static func currentDatabase(_ d: Dialect) -> String {
+        switch d {
+        case .mysql: "SELECT DATABASE()"
+        case .postgres: "SELECT current_database()"
+        case .sqlite: "SELECT 'main'"
+        }
+    }
+
+    /// Server-internal databases, listed last / dimmed in pickers.
+    public static let systemDatabases: Set<String> = ["information_schema", "mysql", "performance_schema", "sys", "postgres"]
+
     static let pgName = "CASE WHEN %1$@.nspname = 'public' THEN %2$@.relname ELSE %1$@.nspname || '.' || %2$@.relname END"
 
     public static func tables(_ d: Dialect) -> String {
