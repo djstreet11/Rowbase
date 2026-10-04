@@ -24,3 +24,10 @@ See docs/RELEASING.md for the full guide. Key facts:
 - Always rebuild dist/rowbase-macos-arm64 BEFORE native/scripts/release.sh — bundle.sh embeds it as Resources/rowbase (MCP).
 - Pitfalls: Nuitka "self-execution" flag breaks our `-c` → `--no-deployment-flag=self-execution`; one-file binaries may get
   ASCII stdio/argv in C locale → cli._utf8_stdio + surrogate argv repair; keyring needs `--include-distribution-metadata=keyring`.
+
+## GitHub release (verified 2026-10-04, v0.2.0)
+- Bump `rowbase/__init__.py`, `pyproject.toml` and `native/VERSION` together → commit → `git tag -a vX.Y.Z` → push main + tag.
+- .github/workflows/release.yml builds Linux x64/arm64, Windows x64 (doctor runs on the runner), macOS arm64 one-files + DMG
+  (embeds the CLI) and publishes them to https://github.com/djstreet11/Rowbase/releases (~20–30 min).
+- Watch by run id: `curl -s https://api.github.com/repos/djstreet11/Rowbase/actions/runs/<id>` (match the run id, not a text pattern
+  across several runs — a pattern once matched another run's "completed").
