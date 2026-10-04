@@ -10,6 +10,7 @@ MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for 
   <a href="https://github.com/djstreet11/Rowbase/releases/latest"><img src="https://img.shields.io/github/v/release/djstreet11/Rowbase?label=download" alt="Latest release"></a>
   <a href="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml"><img src="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/djstreet11/Rowbase/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="https://glama.ai/mcp/servers/djstreet11/Rowbase"><img src="https://glama.ai/mcp/servers/djstreet11/Rowbase/badges/score.svg" alt="Rowbase MCP server on Glama"></a>
   <a href="https://pypi.org/project/rowbase-db/"><img src="https://img.shields.io/pypi/v/rowbase-db?label=PyPI" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/MCP%20Registry-io.github.djstreet11%2Frowbase-8A2BE2" alt="MCP Registry">
 </p>

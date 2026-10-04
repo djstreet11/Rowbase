@@ -21,3 +21,6 @@ description: Work on or use Rowbase's MCP server (rowbase/mcp.py) — add/change
 - Rebuild dist/rowbase-macos-arm64 after Python changes — Claude Code runs that binary, not the venv.
 - Dockerfile (repo root) runs `rowbase mcp` as non-root with ROWBASE_SECRETS=file — used by Glama's automated checks; keep it working
   (test: build, pipe initialize + tools/list into `docker run -i --rm <img>`).
+- Glama (https://glama.ai/mcp/servers/djstreet11/Rowbase): build spec is configured on Glama's admin page, not from our Dockerfile —
+  Build steps `["uv sync"]`, CMD `["mcp-proxy","--","uv","run","rowbase","mcp"]` (without `mcp` rowbase opens the web UI and checks hang),
+  no env/placeholders needed. glama.json lists maintainers. Verified locally with their exact Dockerfile + mcp-proxy HTTP (2026-10-05).

@@ -59,7 +59,7 @@ Builds are not code-signed yet — macOS: System Settings → Privacy & Security
 
 **MCP directories** (biggest audience right now)
 - [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) — PR under "Databases"
-- [Glama](https://glama.ai/mcp/servers) — indexes GitHub; claim the server page
+- [Glama](https://glama.ai/mcp/servers/djstreet11/Rowbase) — ✅ listed (2026-10-05). Build spec: build `uv sync`, CMD `mcp-proxy -- uv run rowbase mcp` (the `mcp` arg is required!)
 - [Smithery](https://smithery.ai), [mcp.so](https://mcp.so), [PulseMCP](https://www.pulsemcp.com/servers) — submit form
 - Official [MCP Registry](https://registry.modelcontextprotocol.io) — ✅ listed as `io.github.djstreet11/rowbase` (auto-updated by mcp-registry.yml)
 
