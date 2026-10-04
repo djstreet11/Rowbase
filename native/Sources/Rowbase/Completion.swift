@@ -488,6 +488,8 @@ final class Completer {
     private var seq = 0
     var skipNext = false
     var lastChangeLen = 0
+    /// Replaces the SQL-editor provider (WHERE / ORDER BY fields suggest only the table's columns, keywords, values).
+    var custom: (@MainActor (CompletionContext, Bool) async -> [CompletionItem]?)?
 
     var isOpen: Bool { popup.isVisible }
 
@@ -543,7 +545,8 @@ final class Completer {
         let my = seq
         Task { [weak self] in
             guard let self else { return }
-            let raw = await provider.items(c, valueOnly: valueOnly)
+            let raw: [CompletionItem]?
+            if let custom { raw = await custom(c, valueOnly) } else { raw = await provider.items(c, valueOnly: valueOnly) }
             guard my == seq else { return }       // stale response
             guard let raw else { return close() }
             let items = CompletionLogic.rank(raw, prefix: c.prefix)

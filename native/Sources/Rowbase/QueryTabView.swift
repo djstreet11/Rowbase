@@ -13,13 +13,23 @@ struct QueryTabView: View {
                         .tint(.red).keyboardShortcut(".", modifiers: .command).help("Stop the running query (⌘.)")
                 } else {
                     Button { state.run(tab) } label: { Label("Run", systemImage: "play.fill") }
-                        .help("Run statement under caret or selection (⌘↩)")
+                        .buttonStyle(.borderedProminent).help("Run statement under caret or selection (⌘↩)")
                 }
                 Button { state.run(tab, explain: true) } label: { Label("Explain", systemImage: "chart.bar.doc.horizontal") }
+                if tab.connection.dialect != .sqlite {
+                    Button { state.run(tab, explain: true, analyze: true) } label: { Label("Explain Analyze", systemImage: "stopwatch") }
+                        .help("EXPLAIN ANALYZE actually executes the statement")
+                }
                 Picker("Limit", selection: $tab.limit) {
                     ForEach([100, 500, 1000, 5000], id: \.self) { Text("\($0)").tag($0) }
                 }
                 .frame(width: 130)
+                Picker("", selection: $tab.transpose) {
+                    Text("Grid").tag(false)
+                    Text("Transpose").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 150).help("Transpose: rows become columns")
+                ColumnsButton(tab: tab)
                 Spacer()
                 ConnDot(color: tab.connection.color, size: 7)
                 Text(tab.connection.name).font(.caption).foregroundStyle(.secondary)

@@ -50,13 +50,11 @@ struct TableTabView: View {
                 Text("Structure").tag(true)
             }
             .pickerStyle(.segmented).labelsHidden().frame(width: 150)
-            TextField("WHERE …", text: $tab.whereText)
-                .font(.system(size: 12, design: .monospaced)).textFieldStyle(.roundedBorder)
-                .onSubmit(apply)
-            TextField(tab.defaultOrder.isEmpty ? "ORDER BY …" : tab.defaultOrder, text: $tab.orderText)
-                .font(.system(size: 12, design: .monospaced)).textFieldStyle(.roundedBorder)
+            CompletingField(text: $tab.whereText, placeholder: "WHERE …", mode: .whereClause, tab: tab, state: state, onSubmit: apply)
+                .frame(maxWidth: .infinity)
+            CompletingField(text: $tab.orderText, placeholder: tab.defaultOrder.isEmpty ? "ORDER BY …" : tab.defaultOrder,
+                            mode: .orderBy, tab: tab, state: state, onSubmit: apply)
                 .frame(maxWidth: 240)
-                .onSubmit(apply)
             Picker("", selection: $tab.limit) {
                 ForEach([50, 100, 500, 1000], id: \.self) { Text("\($0)").tag($0) }
             }
@@ -67,7 +65,7 @@ struct TableTabView: View {
                     .tint(.red).keyboardShortcut(".", modifiers: .command).help("Stop the running query (⌘.)")
             } else {
                 Button { apply() } label: { Label("Run", systemImage: "play.fill") }
-                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent).help("Run (Return in a field, ⌘↩)")
             }
         }
     }
@@ -81,10 +79,16 @@ struct TableTabView: View {
                 .disabled(!tab.hasMore || tab.running)
             Button("Count") { Task { await state.count(tab) } }
             Spacer()
+            Picker("", selection: $tab.transpose) {
+                Text("Grid").tag(false)
+                Text("Transpose").tag(true)
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 150).help("Transpose: rows become columns")
+            ColumnsButton(tab: tab)
             Button { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) } label: { Label("Open in SQL", systemImage: "terminal") }
-            Button { if let r = tab.result { copyToPasteboard(Export.json(columns: r.columns, rows: r.rows)) } } label: { Label("Copy JSON", systemImage: "curlybraces") }
+            Button { if let r = tab.visibleExport { copyToPasteboard(Export.json(columns: r.columns, rows: r.rows)) } } label: { Label("Copy JSON", systemImage: "curlybraces") }
                 .disabled(tab.result == nil)
-            Button { if let r = tab.result { copyToPasteboard(Export.tsv(columns: r.columns, rows: r.rows)) } } label: { Label("Copy TSV", systemImage: "doc.on.doc") }
+            Button { if let r = tab.visibleExport { copyToPasteboard(Export.tsv(columns: r.columns, rows: r.rows)) } } label: { Label("Copy TSV", systemImage: "doc.on.doc") }
                 .disabled(tab.result == nil)
         }
     }

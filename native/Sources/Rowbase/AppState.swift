@@ -7,6 +7,25 @@ struct PendingRun: Identifiable {
     let tab: WorkTab
     let sql: String
     let source: String
+    var isExplain = false
+}
+
+/// Persisted tab (UserDefaults JSON). Title is derived from table + WHERE, so it is not stored.
+struct SavedTab: Codable {
+    var kind: String            // "table" | "query"
+    var table: String?
+    var conn: String
+    var database: String?
+    var whereText: String
+    var orderText: String
+    var limit: Int
+    var sql: String
+    var transpose: Bool
+}
+
+struct SavedTabs: Codable {
+    var tabs: [SavedTab]
+    var active: Int?
 }
 
 @MainActor @Observable
@@ -19,35 +38,41 @@ final class AppState {
 
     var connections: [Connection] = []
     var selectedConnectionID: String? {
-        didSet { UserDefaults.standard.set(selectedConnectionID, forKey: "rowbase.selectedConnection") }
+        didSet { AppDefaults.store.set(selectedConnectionID, forKey: "rowbase.selectedConnection") }
     }
     var tables: [TableEntry] = []
     var databases: [String] = []        // server databases of the selected connection (empty for SQLite)
     var currentDatabase: String?        // what the session actually uses (nil: MySQL connection without a database)
     /// Per-connection database chosen in the sidebar, overriding the connection's configured one (UI state, not saved to connections.json).
-    var databaseOverride: [String: String] = UserDefaults.standard.dictionary(forKey: "rowbase.databaseOverride") as? [String: String] ?? [:] {
-        didSet { UserDefaults.standard.set(databaseOverride, forKey: "rowbase.databaseOverride") }
+    var databaseOverride: [String: String] = AppDefaults.store.dictionary(forKey: "rowbase.databaseOverride") as? [String: String] ?? [:] {
+        didSet { AppDefaults.store.set(databaseOverride, forKey: "rowbase.databaseOverride") }
     }
     var tablesLoading = false
     var tableFilter = ""
     var tabs: [WorkTab] = []
-    var activeTabID: UUID?
+    var activeTabID: UUID? { didSet { loadIfNeeded() } }
+    /// Sidebar kind filter: "all" | "table" | "view".
+    var kindFilter: String = AppDefaults.store.string(forKey: "rowbase.kindFilter") ?? "all" {
+        didSet { AppDefaults.store.set(kindFilter, forKey: "rowbase.kindFilter") }
+    }
     var status = ""
     var showConnections = false
     var showHistory = false
     var showInspector = false
-    var showSidebar: Bool = UserDefaults.standard.object(forKey: "rowbase.showSidebar") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showSidebar, forKey: "rowbase.showSidebar") }
+    var showSidebar: Bool = AppDefaults.store.object(forKey: "rowbase.showSidebar") as? Bool ?? true {
+        didSet { AppDefaults.store.set(showSidebar, forKey: "rowbase.showSidebar") }
     }
     var filterFocusTick = 0
     var pendingRun: PendingRun?
     @ObservationIgnored private var infoCache: [String: TableInfo] = [:]
     @ObservationIgnored private var bootstrapped = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var persistTabs = false
 
     init() {
         engine = Engine(store: store)
         history = History(store: store)
-        selectedConnectionID = UserDefaults.standard.string(forKey: "rowbase.selectedConnection")
+        selectedConnectionID = AppDefaults.store.string(forKey: "rowbase.selectedConnection")
     }
 
     /// Selected connection with the sidebar's database choice applied — everything opened from the sidebar uses this.
@@ -70,7 +95,9 @@ final class AppState {
     var activeTab: WorkTab? { tabs.first { $0.id == activeTabID } }
     var filteredTables: [TableEntry] {
         let f = tableFilter.trimmingCharacters(in: .whitespaces)
-        return f.isEmpty ? tables : tables.filter { $0.name.localizedCaseInsensitiveContains(f) }
+        return tables.filter {
+            (kindFilter == "all" || $0.isView == (kindFilter == "view")) && (f.isEmpty || $0.name.localizedCaseInsensitiveContains(f))
+        }
     }
 
     // MARK: connections & tables
@@ -79,8 +106,82 @@ final class AppState {
         guard !bootstrapped else { return }
         bootstrapped = true
         loadConnections()
+        // Snapshot runs neither restore nor save tabs unless ROWBASE_SNAPSHOT_RESTORE is set (=save: save only, =1: restore + save).
+        let snapRestore = ProcessInfo.processInfo.environment["ROWBASE_SNAPSHOT_RESTORE"]
+        persistTabs = !isSnapshot || snapRestore != nil
+        if !isSnapshot || snapRestore == "1" { restoreTabs() }
+        if persistTabs { trackTabs() }
         await loadTables()
         await runSnapshotIfRequested()
+    }
+
+    // MARK: tab persistence
+
+    private static let tabsKey = "rowbase.tabs"
+
+    private func currentSaved() -> SavedTabs {
+        SavedTabs(tabs: tabs.map {
+            SavedTab(kind: $0.isQuery ? "query" : "table", table: $0.tableName, conn: $0.connection.id, database: $0.connection.database,
+                     whereText: $0.whereText, orderText: $0.orderText, limit: $0.limit, sql: $0.sql, transpose: $0.transpose)
+        }, active: tabs.firstIndex { $0.id == activeTabID })
+    }
+
+    /// Re-arming observation: any change to the tab list or a persisted tab property schedules a debounced save.
+    private func trackTabs() {
+        withObservationTracking {
+            _ = currentSaved()
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.scheduleSave()
+                self.trackTabs()
+            }
+        }
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.saveTabsNow()
+        }
+    }
+
+    func saveTabsNow() {
+        guard persistTabs, let d = try? JSONEncoder().encode(currentSaved()) else { return }
+        AppDefaults.store.set(d, forKey: Self.tabsKey)
+    }
+
+    private func restoreTabs() {
+        guard let d = AppDefaults.store.data(forKey: Self.tabsKey), let saved = try? JSONDecoder().decode(SavedTabs.self, from: d) else { return }
+        var restored: [(Int, WorkTab)] = []
+        for (i, s) in saved.tabs.enumerated() {
+            guard var c = connections.first(where: { $0.id == s.conn }) else { continue }  // connection deleted → drop tab
+            if c.dialect != .sqlite { c.database = s.database ?? c.database }
+            let t: WorkTab
+            if s.kind == "table", let name = s.table {
+                t = WorkTab(kind: .table(name), connection: c)
+                t.needsLoad = true
+            } else { t = WorkTab(kind: .query, connection: c) }
+            t.whereText = s.whereText
+            t.orderText = s.orderText
+            t.limit = s.limit
+            t.sql = s.sql
+            t.transpose = s.transpose
+            restored.append((i, t))
+        }
+        guard !restored.isEmpty else { return }
+        tabs = restored.map(\.1)
+        let active = saved.active.flatMap { a in restored.first { $0.0 == a }?.1 } ?? restored.last?.1
+        activeTabID = active?.id
+    }
+
+    /// Restored table tabs load only when first activated (no burst of queries at launch).
+    private func loadIfNeeded() {
+        guard let t = activeTab, t.needsLoad else { return }
+        t.needsLoad = false
+        Task { await loadTable(t) }
     }
 
     func loadConnections() {
@@ -226,17 +327,22 @@ final class AppState {
         run(t)
     }
 
-    func run(_ tab: WorkTab, explain: Bool = false) {
+    func run(_ tab: WorkTab, explain: Bool = false, analyze: Bool = false) {
         if !tab.isQuery { Task { await loadTable(tab) }; return }
         var sql = SQLSplit.statement(in: tab.sql, selection: tab.selection, dialect: tab.connection.dialect)
         guard !sql.isEmpty else { return }
-        if explain { sql = tab.explainPrefix + sql }
+        if explain || analyze {
+            // never stack prefixes: EXPLAIN [ANALYZE | QUERY PLAN] <stmt> → <new prefix> <stmt>
+            sql = sql.replacingOccurrences(of: #"^\s*EXPLAIN(\s+ANALYZE|\s+QUERY\s+PLAN)?\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+            sql = (analyze ? "EXPLAIN ANALYZE " : tab.explainPrefix) + sql
+        }
         let first = SQLGuard.analyze(sql, tab.connection.dialect).first
+        let isExplain = explain || analyze || first == "EXPLAIN"
         if !tab.connection.readOnly && Self.mayWrite(sql, first: first, dialect: tab.connection.dialect) {
-            pendingRun = PendingRun(tab: tab, sql: sql, source: "console")
+            pendingRun = PendingRun(tab: tab, sql: sql, source: "console", isExplain: isExplain)
             return
         }
-        Task { await execute(tab, sql: sql, isExplain: explain || first == "EXPLAIN") }
+        Task { await execute(tab, sql: sql, isExplain: isExplain) }
     }
 
     /// Confirmation needed on RW connections: any non-read verb, and WITH/EXPLAIN wrapping a write
@@ -257,7 +363,7 @@ final class AppState {
 
     func confirm(_ p: PendingRun) {
         pendingRun = nil
-        Task { await execute(p.tab, sql: p.sql, isExplain: false) }
+        Task { await execute(p.tab, sql: p.sql, isExplain: p.isExplain) }
     }
 
     private func record(_ tab: WorkTab, sql: String, source: String, result: QueryResult?, error: String?) {
@@ -365,6 +471,10 @@ final class AppState {
         if let sql = env["ROWBASE_SNAPSHOT_SQL"], !sql.isEmpty, let tab = openQuery(sql: sql) { run(tab) }
         var completeTab: WorkTab?
         if let text = env["ROWBASE_SNAPSHOT_COMPLETE"], !text.isEmpty, let tab = openQuery(sql: text) { completeTab = tab }
+        if let t = activeTab {
+            if env["ROWBASE_SNAPSHOT_TRANSPOSE"] == "1" { t.transpose = true }
+            if let h = env["ROWBASE_SNAPSHOT_HIDE"], !h.isEmpty { t.hidden = Set(h.split(separator: ",").map(String.init)) }
+        }
         if env["ROWBASE_SNAPSHOT_INSPECT"] == "1" {
             try? await Task.sleep(for: .milliseconds(1200))
             if let t = activeTab { inspect(t, row: 0) }
@@ -377,7 +487,23 @@ final class AppState {
             }
         }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "connections" { showConnections = true }
+        if env["ROWBASE_SNAPSHOT_SHEET"] == "history" { showHistory = true }
         try? await Task.sleep(for: .milliseconds(2500))
+        if env["ROWBASE_SNAPSHOT_COLUMNS"] == "1", let t = activeTab {
+            t.columnPickerOpen = true
+            try? await Task.sleep(for: .milliseconds(800))
+        }
+        if let text = env["ROWBASE_SNAPSHOT_WHERE_COMPLETE"], !text.isEmpty, let t = activeTab, let f = t.whereField, let c = t.whereCompleter {
+            t.whereText = text
+            try? await Task.sleep(for: .milliseconds(300))
+            f.window?.makeFirstResponder(f)
+            if let ed = f.currentEditor() as? NSTextView {
+                ed.setSelectedRange(NSRange(location: (ed.string as NSString).length, length: 0))
+                c.tv = ed
+                c.update(force: true)
+                try? await Task.sleep(for: .milliseconds(800))
+            }
+        }
         func render(_ w: NSWindow, to p: String) {
             guard let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
             v.cacheDisplay(in: v.bounds, to: rep)
@@ -390,10 +516,20 @@ final class AppState {
             let base = (path as NSString).deletingPathExtension
             if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: base + "-popup.png")) }
         }
+        let base0 = (path as NSString).deletingPathExtension
+        if activeTab?.columnPickerOpen == true {
+            for (i, w) in NSApp.windows.enumerated() where w !== main && w.isVisible && w.sheetParent == nil && w.contentView != nil && w !== completeTab?.editor?.completer?.popup.window {
+                render(w, to: base0 + "-popover\(i).png")
+            }
+        }
+        if let pop = activeTab?.whereCompleter?.popup.window {
+            render(pop, to: base0 + "-wherepopup.png")
+        }
         if let sheet = main?.attachedSheet ?? NSApp.windows.first(where: { $0.sheetParent != nil }) {
             let base = (path as NSString).deletingPathExtension
             render(sheet, to: base + "-sheet.png")
         }
+        saveTabsNow()
         exit(0)
     }
 }

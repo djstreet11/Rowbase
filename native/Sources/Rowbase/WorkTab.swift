@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import RowbaseCore
 
 struct Crumb: Hashable, Identifiable {
@@ -35,6 +36,14 @@ final class WorkTab: Identifiable {
     var hasMore = false
     var note: String?
     var runStart: Date?
+    var transpose = false
+    var columnPickerOpen = false
+    /// Columns hidden in grid / transpose / copy. Table tabs persist this per connection+database+table.
+    var hidden: Set<String> = [] { didSet { if oldValue != hidden { saveHidden() } } }
+    /// Restored from the previous session: load the data when the tab is first activated.
+    @ObservationIgnored var needsLoad = false
+    @ObservationIgnored weak var whereField: NSTextField?
+    @ObservationIgnored weak var whereCompleter: Completer?
     @ObservationIgnored var selection = NSRange(location: 0, length: 0)
     @ObservationIgnored var token = 0
     @ObservationIgnored weak var editor: SQLTextView?
@@ -43,6 +52,27 @@ final class WorkTab: Identifiable {
         self.kind = kind
         self.connection = connection
         if kind == .query { limit = 500 }
+        if let k = hiddenKey { hidden = Set(AppDefaults.store.stringArray(forKey: k) ?? []) }
+    }
+
+    private var hiddenKey: String? {
+        guard let t = tableName else { return nil }
+        return "rowbase.hidden.\(connection.id).\(connection.database ?? "").\(t)"
+    }
+
+    private func saveHidden() {
+        guard let k = hiddenKey else { return }
+        if hidden.isEmpty { AppDefaults.store.removeObject(forKey: k) } else { AppDefaults.store.set(hidden.sorted(), forKey: k) }
+    }
+
+    /// Every column the picker can offer: result columns, else the table's columns.
+    var allColumns: [String] { result?.columns ?? info?.columns.map(\.name) ?? [] }
+
+    /// Result restricted to the visible columns (what Copy JSON / TSV export).
+    var visibleExport: (columns: [String], rows: [[String?]])? {
+        guard let r = result else { return nil }
+        let idx = r.columns.indices.filter { !hidden.contains(r.columns[$0]) }
+        return (idx.map { r.columns[$0] }, r.rows.map { row in idx.map { $0 < row.count ? row[$0] : nil } })
     }
 
     var tableName: String? { if case .table(let t) = kind { t } else { nil } }

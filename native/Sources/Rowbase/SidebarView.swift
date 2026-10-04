@@ -73,11 +73,29 @@ struct SidebarView: View {
                     Button { state.tableFilter = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
+                kindMenu
             }
             .padding(.horizontal, 6).padding(.vertical, 4)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
         .padding(8)
+    }
+
+    /// All / Tables / Views filter (persisted).
+    private var kindMenu: some View {
+        Menu {
+            Picker("Show", selection: $state.kindFilter) {
+                Text("All").tag("all")
+                Text("Tables").tag("table")
+                Text("Views").tag("view")
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: state.kindFilter == "all" ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                .foregroundStyle(state.kindFilter == "all" ? Color.secondary : Color.accentColor)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Show: \(state.kindFilter == "all" ? "all" : state.kindFilter == "table" ? "tables only" : "views only")")
     }
 
     /// Database switcher: lists server databases; the choice overrides the connection's configured database.

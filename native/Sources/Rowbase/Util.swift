@@ -133,3 +133,16 @@ enum SQLSplit {
 
 /// True when the app was launched for an automated snapshot (ROWBASE_SNAPSHOT=…).
 let isSnapshot = ProcessInfo.processInfo.environment["ROWBASE_SNAPSHOT"] != nil
+
+/// UserDefaults used for UI state. With ROWBASE_HOME set (scratch/test homes) state goes to a per-home suite so
+/// automated runs never touch the user's real saved tabs, hidden columns or selections.
+enum AppDefaults {
+    nonisolated(unsafe) static let store: UserDefaults = {
+        if let home = ProcessInfo.processInfo.environment["ROWBASE_HOME"], !home.isEmpty {
+            var h: UInt64 = 5381
+            for b in home.utf8 { h = (h &* 33) &+ UInt64(b) }
+            if let u = UserDefaults(suiteName: "rowbase.home.\(h)") { return u }
+        }
+        return .standard
+    }()
+}
