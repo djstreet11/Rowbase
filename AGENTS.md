@@ -27,7 +27,7 @@ Linux/Windows — far future.
 - **Zero-deps frontend**: no frameworks/CDNs in `rowbase/static/`; `esc()` every interpolated value. Python: stdlib-first.
 - **Style**: match surrounding code — compact, dense, small helpers, comments only for non-obvious "why".
 - **Tests**: run the suite after backend changes; keep it green. Fixture DB `rowbase_test` is dropped/recreated by tests.
-- **Git**: branch `main`, no remote. Commit logical units; message body + `Co-Authored-By` trailer. Don't push unless asked.
+- **Git**: branch `main`, remote `origin` = github.com/djstreet11/Rowbase (public). Commit logical units; message body + `Co-Authored-By` trailer. Don't push unless asked.
 - **Token economy**: work in English; delegate to a Sonnet subagent only when (subagent + review) is cheaper than inline
   (worked well for: large mechanical frontend rewrite against a fixed API contract).
 
@@ -75,3 +75,5 @@ short: facts and rules only, no history.
 - 2026-10-04: Rowbase MCP is registered in the user's Claude Code (user scope → dist/rowbase-macos-arm64 mcp). Terminal `claude` CLI is
   NOT logged in and MCP servers load only at session start → verify by driving the exact command from ~/.claude.json as a JSON-RPC client.
 - 2026-10-04: User's real Rowbase connections (test, klium) are MySQL read-only and contain personal data — keep MCP read-only by default.
+- 2026-10-04: GitHub CI: macos runners default to an older Xcode → use maxim-lobanov/setup-xcode latest-stable (Swift 6.2). Job logs need
+  admin rights; read failures via public annotations API (/check-runs/<job>/annotations) — CI echoes errors as ::error::. `gh` not installed.
