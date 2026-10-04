@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: What problem would this solve?, description: "e.g. \"I often need to … and currently have to …\""}
+    validations: {required: true}
+  - type: textarea
+    id: idea
+    attributes: {label: What would you like Rowbase to do?}
+    validations: {required: true}
+  - type: dropdown
+    id: part
+    attributes: {label: Area, multiple: true, options: [Native macOS app, Web UI, CLI, MCP / AI assistants, New database engine, Packaging]}

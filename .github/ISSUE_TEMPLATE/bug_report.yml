@@ -1,0 +1,30 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes: {value: "Thanks for reporting! Please never paste passwords or production data."}
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which part of Rowbase?
+      options: [Native macOS app, Web UI (rowbase ui), CLI, MCP server, One-file binary (startup/installation)]
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: Version, description: "`rowbase doctor` prints it; the app shows it in About", placeholder: "0.2.0"}
+    validations: {required: true}
+  - type: input
+    id: os
+    attributes: {label: OS, placeholder: "macOS 26.1 (M2) / Ubuntu 24.04 x64 / Windows 11"}
+    validations: {required: true}
+  - type: dropdown
+    id: db
+    attributes: {label: Database, multiple: true, options: [MySQL, MariaDB, PostgreSQL, SQLite, Not database related]}
+  - type: textarea
+    id: what
+    attributes: {label: What happened?, description: Steps to reproduce, expected vs actual behaviour, error text.}
+    validations: {required: true}
+  - type: textarea
+    id: doctor
+    attributes: {label: "`rowbase doctor` output (optional)", render: text}
