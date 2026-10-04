@@ -10,7 +10,8 @@ MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for 
   <a href="https://github.com/djstreet11/Rowbase/releases/latest"><img src="https://img.shields.io/github/v/release/djstreet11/Rowbase?label=download" alt="Latest release"></a>
   <a href="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml"><img src="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/djstreet11/Rowbase/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/MCP-server-8A2BE2" alt="MCP server">
+  <a href="https://pypi.org/project/rowbase-db/"><img src="https://img.shields.io/pypi/v/rowbase-db?label=PyPI" alt="PyPI"></a>
+  <img src="https://img.shields.io/badge/MCP%20Registry-io.github.djstreet11%2Frowbase-8A2BE2" alt="MCP Registry">
 </p>
 
 <p align="center"><img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/table-inspector.png" width="860" alt="Rowbase: table browser with row inspector"></p>
@@ -49,8 +50,11 @@ macOS → *System Settings → Privacy & Security → Open Anyway*; Windows → 
 Open **AI / MCP** in the app, click **Copy prompt**, paste it into your assistant — it registers the server, reads the
 built-in guide and creates a reusable skill. Or register manually:
 ```bash
-claude mcp add rowbase -- /path/to/rowbase mcp
+claude mcp add rowbase -- /path/to/rowbase mcp          # one-file binary or app
+claude mcp add rowbase -- uvx --from rowbase-db rowbase mcp   # straight from PyPI, nothing to download
 ```
+Listed in the official [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.djstreet11/rowbase`.
+
 Results come back as compact [TOON](https://toonformat.dev) tables (~40% fewer tokens than JSON):
 ```
 rows[2]{id,customer,total}:

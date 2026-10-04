@@ -79,4 +79,5 @@ short: facts and rules only, no history.
   admin rights; read failures via public annotations API (/check-runs/<job>/annotations) — CI echoes errors as ::error::. `gh` not installed.
 - 2026-10-04: Promotion kit lives in docs/PROMOTION.md (repo About text, 20 topics, release notes, directories, post drafts);
   social preview = `swift docs/assets/make-social.swift`; README screenshots in docs/assets (scratch data only — never real DB data).
-- 2026-10-04: PyPI name `rowbase` is taken by an unrelated project → publish as `rowbase-db` (command stays `rowbase`).
+- 2026-10-05: Published: PyPI `rowbase-db` (Trusted Publishing from release.yml) and MCP Registry `io.github.djstreet11/rowbase`
+  (mcp-registry.yml). `uvx --from rowbase-db rowbase mcp` verified (also on Python 3.14). PyPI name `rowbase` belongs to another project.

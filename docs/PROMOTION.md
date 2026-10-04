@@ -61,7 +61,7 @@ Builds are not code-signed yet — macOS: System Settings → Privacy & Security
 - [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) — PR under "Databases"
 - [Glama](https://glama.ai/mcp/servers) — indexes GitHub; claim the server page
 - [Smithery](https://smithery.ai), [mcp.so](https://mcp.so), [PulseMCP](https://www.pulsemcp.com/servers) — submit form
-- Official [MCP Registry](https://registry.modelcontextprotocol.io) — needs a package (PyPI/npm/OCI); see §6
+- Official [MCP Registry](https://registry.modelcontextprotocol.io) — ✅ listed as `io.github.djstreet11/rowbase` (auto-updated by mcp-registry.yml)
 
 **App & tool lists**
 - [serhii-londar/open-source-mac-os-apps](https://github.com/serhii-londar/open-source-mac-os-apps) — "Database" section
@@ -111,8 +111,7 @@ Have ready: repository URL, OSI license (Apache-2.0), your role (project lead), 
 release history and how you'll use the IDEs (PyCharm/AppCode-style Swift work, DataGrip comparison).
 
 ## 6. Next growth steps
-- **PyPI package** (`rowbase` is taken by an unrelated project → publish as `rowbase-db`, command stays `rowbase`):
-  enables `uvx --from rowbase-db rowbase mcp` and the official MCP Registry listing.
+- ✅ **PyPI** `rowbase-db` (Trusted Publishing on every tag) → `uvx --from rowbase-db rowbase mcp` works.
 - **Homebrew tap** (`brew install djstreet11/tap/rowbase`) and **winget** manifest — trusted install paths.
 - **Code signing** (Apple Developer ID, Windows certificate) — removes the "unknown developer" warnings.
 - **Demo GIF** in the README (30 s: connect → browse → FK jump → ask Claude a question).
