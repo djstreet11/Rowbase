@@ -11,55 +11,62 @@ struct RowInspector: View {
         return tab.effectiveRow(i)  // includes pending edits
     }
 
-    private var title: String {
-        guard let tab, tab.inspectRow != nil else { return "Inspector" }
-        return "\(tab.tableName ?? "Result") · row \((tab.inspectRow ?? 0) + 1 + (tab.isQuery ? 0 : tab.offset))"
-    }
+    private var rowNumber: Int { (tab?.inspectRow ?? 0) + 1 + ((tab?.isQuery ?? true) ? 0 : (tab?.offset ?? 0)) }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text(title).font(.headline).lineLimit(1).truncationMode(.middle)
+            HStack(alignment: .center, spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(tab?.inspectRow == nil ? "Inspector" : "Row \(rowNumber)").font(.headline).lineLimit(1)
+                    if tab?.inspectRow != nil {
+                        Text(tab?.tableName ?? "Query result").font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                }
                 Spacer(minLength: 4)
-                Button("Copy JSON") {
+                IconButton(symbol: "doc.on.doc", help: "Copy row as JSON") {
                     if let r = tab?.result, let row { copyToPasteboard(Export.jsonObject(columns: r.columns, row: row, indent: "")) }
                 }
-                .controlSize(.small).disabled(row == nil)
-                Button { state.showInspector = false } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless).help("Close (Esc)")
+                .disabled(row == nil)
+                IconButton(symbol: "xmark", help: "Close (Esc)") { state.showInspector = false }
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            TextField("Filter fields", text: $filter).textFieldStyle(.roundedBorder).controlSize(.small)
-                .padding(.horizontal, 10).padding(.bottom, 8)
+            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 8)
+            HStack(spacing: 5) {
+                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+                TextField("Filter fields", text: $filter).textFieldStyle(.plain)
+            }
+            .font(.callout)
+            .padding(.horizontal, 8).frame(height: 24)
+            .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 12).padding(.bottom, 8)
             Divider()
             if let tab, let r = tab.result, let row {
-                List {
-                    Section {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(r.columns.enumerated()), id: \.offset) { i, name in
                             if filter.isEmpty || name.localizedCaseInsensitiveContains(filter) {
                                 field(tab: tab, name: name, value: i < row.count ? row[i] : nil, row: tab.inspectRow ?? 0)
+                                Divider().padding(.leading, 12)
                             }
                         }
-                    }
-                    if let info = tab.info, !info.referencedBy.isEmpty {
-                        Section("Referenced by") {
+                        if let info = tab.info, !info.referencedBy.isEmpty {
+                            SectionLabel(title: "Referenced by").padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 6)
                             ForEach(Array(info.referencedBy.enumerated()), id: \.offset) { _, ref in
                                 if let ci = r.columns.firstIndex(of: ref.refColumn), ci < row.count, let v = row[ci] {
                                     Button { openRef(tab, ref, value: v) } label: {
-                                        HStack {
-                                            Image(systemName: "arrow.turn.down.right")
-                                            Text("\(ref.table).\(ref.column)")
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "arrow.turn.down.right").font(.system(size: 11)).foregroundStyle(.secondary)
+                                            Text("\(ref.table).\(ref.column)").font(.callout)
                                             Spacer()
                                         }
+                                        .padding(.horizontal, 12).frame(height: 24).contentShape(Rectangle())
                                     }
-                                    .buttonStyle(.link)
+                                    .buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                                    .help("Open \(ref.table) rows referencing this row")
                                 }
                             }
                         }
                     }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
             } else {
                 Spacer()
                 Text("Select a row").foregroundStyle(.secondary)
@@ -75,16 +82,13 @@ struct RowInspector: View {
         let ci = tab.info?.columns.first { $0.name == name }
         let editable = tab.isEditable(name) && !tab.deleted.contains(row)
         let edited = tab.isEdited(row: row, column: name)
-        return VStack(alignment: .leading, spacing: 2) {
+        let fk = ci?.fk != nil && !tab.isQuery
+        let mono = Font.system(size: 12, design: .monospaced)
+        return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Text(name).fontWeight(.semibold)
-                if let t = ci?.type { Text(t).font(.caption).foregroundStyle(.secondary) }
+                Text(name).fontWeight(.semibold).lineLimit(1)
+                Spacer(minLength: 4)
                 if editable {
-                    Spacer(minLength: 4)
-                    if ci?.fk != nil, let value {
-                        Button { state.followFK(from: tab, column: name, value: value) } label: { Image(systemName: "arrow.up.right.square") }
-                            .buttonStyle(.borderless).help("Open referenced row")
-                    }
                     if ci?.nullable != false {
                         Button("NULL") { tab.setCell(CellRef(insert: false, row: row, column: name), to: nil) }
                             .buttonStyle(.borderless).font(.caption2).foregroundStyle(.secondary).help("Set to NULL")
@@ -94,24 +98,30 @@ struct RowInspector: View {
                             .buttonStyle(.borderless).help("Revert change")
                     }
                 }
+                if let t = ci?.type { Text(t).font(.caption).foregroundStyle(.tertiary).lineLimit(1) }
             }
-            if editable {
-                InspectorEditField(tab: tab, row: row, name: name, value: value)
-                    .id("\(row)|\(name)|\(edited)")
-            } else if let value {
-                if ci?.fk != nil, !tab.isQuery {
-                    Button { state.followFK(from: tab, column: name, value: value) } label: {
-                        Text(value).font(.system(size: 12, design: .monospaced)).multilineTextAlignment(.leading)
-                    }.buttonStyle(.link)
+            HStack(alignment: .top, spacing: 6) {
+                if editable {
+                    InspectorEditField(tab: tab, row: row, name: name, value: value)
+                        .id("\(row)|\(name)|\(edited)")
+                } else if let value {
+                    Text(value).font(mono).foregroundStyle(fk ? Color(nsColor: .linkColor) : .primary)
+                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Text(value).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                    Text("NULL").font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color(nsColor: .quaternaryLabelColor), in: RoundedRectangle(cornerRadius: 4))
+                        .foregroundStyle(.tertiary)
+                    Spacer(minLength: 0)
                 }
-            } else {
-                Text("NULL").font(.system(size: 12, design: .monospaced)).italic().foregroundStyle(.tertiary)
+                if fk, let value {
+                    Button { state.followFK(from: tab, column: name, value: value) } label: { Image(systemName: "arrow.right.circle") }
+                        .buttonStyle(.borderless).foregroundStyle(Color(nsColor: .linkColor)).help("Open referenced row")
+                }
             }
         }
-        .padding(.vertical, 2)
-        .background(edited ? Color.yellow.opacity(0.22) : Color.clear)
+        .padding(.horizontal, 12).padding(.vertical, 7)
+        .background(edited ? Color.yellow.opacity(0.18) : Color.clear)
     }
 
     private func openRef(_ tab: WorkTab, _ ref: Reference, value: String) {

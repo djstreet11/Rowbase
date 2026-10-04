@@ -18,43 +18,68 @@ struct ExportMenu: View {
                 Button(f.title) { state.export(tab, f) }
             }
         } label: {
-            Label("Export", systemImage: "square.and.arrow.up")
+            IconMenuLabel(symbol: "square.and.arrow.up")
         }
+        .menuStyle(.button).buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .disabled(!enabled)
-        .help(tab.isQuery ? "Re-run the last statement and save the full result (up to 1,000,000 rows)"
-                          : "Save the whole filtered table, not just this page")
+        .help(tab.isQuery ? "Export — re-run the last statement and save the full result (up to 1,000,000 rows)"
+                          : "Export — save the whole filtered table, not just this page")
     }
 }
 
-/// Edit controls row of a table tab (only shown when the tab is edit-capable).
-struct EditToolbar: View {
+/// "…" menu of the tab toolbars: copy actions (+ table-only Open in SQL Editor / Count Rows).
+struct MoreMenu: View {
+    let state: AppState
+    let tab: WorkTab
+
+    var body: some View {
+        Menu {
+            Button("Copy as JSON") { if let r = tab.visibleExport { copyToPasteboard(Export.json(columns: r.columns, rows: r.rows)) } }
+                .disabled(tab.result == nil)
+            Button("Copy as TSV") { if let r = tab.visibleExport { copyToPasteboard(Export.tsv(columns: r.columns, rows: r.rows)) } }
+                .disabled(tab.result == nil)
+            if !tab.isQuery {
+                Divider()
+                Button("Open in SQL Editor") { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) }
+                Button("Count Rows") { Task { await state.count(tab) } }
+            }
+        } label: {
+            IconMenuLabel(symbol: "ellipsis.circle")
+        }
+        .menuStyle(.button).buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions")
+    }
+}
+
+/// Soft yellow strip under the toolbar while a table tab has pending edits.
+struct PendingStrip: View {
     let state: AppState
     @Bindable var tab: WorkTab
 
     var body: some View {
         let n = tab.pendingCount
-        HStack(spacing: 8) {
-            Button { tab.addInsertRow() } label: { Label("Row", systemImage: "plus") }
-                .help("Add an empty row at the top (saved with Save)")
-            Button { tab.deleteSelected() } label: { Label("Delete", systemImage: "trash") }
-                .disabled(!tab.hasSelection)
-                .help("Mark the selected rows for deletion")
-            Spacer()
-            if n > 0 {
-                Text(plural(n, "change"))
-                    .font(.caption.weight(.semibold)).monospacedDigit()
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(Color.yellow.opacity(0.28), in: Capsule())
-                Button("Preview SQL") { Task { await state.previewSQL(tab) } }
-                Button("Discard") { tab.clearPending() }
+        if n > 0 {
+            HStack(spacing: 10) {
+                Image(systemName: "pencil.circle.fill").foregroundStyle(.orange)
+                Text(plural(n, "unsaved change")).fontWeight(.medium).monospacedDigit()
+                Spacer()
+                Button("Preview SQL") { Task { await state.previewSQL(tab) } }.buttonStyle(.link)
+                Button("Discard") { tab.clearPending() }.buttonStyle(.link)
                 Button { state.requestSave(tab) } label: { Text(tab.saving ? "Saving…" : "Save") }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(tab.saving)
                     .help("Apply all pending changes in one transaction (⌘S)")
             }
+            .font(.callout)
+            .controlSize(.small)
+            .padding(.horizontal, 12).frame(height: 28)
+            .background(Color.yellow.opacity(0.16))
+            Divider()
         }
     }
 }

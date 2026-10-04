@@ -9,17 +9,9 @@ struct MainView: View {
                        sidebar: SidebarView(state: state),
                        detail: DetailView(state: state),
                        inspector: RowInspector(state: state, tab: state.activeTab))
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button { state.toggleSidebar() } label: { Image(systemName: "sidebar.left") }
-                    .help("Toggle Sidebar (⌥⌘S)")
-            }
-            ToolbarItem(placement: .navigation) { ConnectionBadge(state: state) }
-            ToolbarItem(placement: .primaryAction) {
-                Button { state.toggleInspector() } label: { Image(systemName: "sidebar.right") }
-                    .help("Toggle Inspector (⌘I)")
-            }
-        }
+        .toolbar { AppToolbar(state: state) }
+        .navigationTitle(state.activeTab?.title ?? "Rowbase")
+        .navigationSubtitle(subtitle)
         .sheet(isPresented: $state.showConnections) { ConnectionsSheet(state: state) }
         .sheet(isPresented: $state.showHistory) { HistorySheet(state: state) }
         .alert("Run on READ-WRITE connection \(state.pendingRun?.tab.connection.name ?? "")?",
@@ -33,6 +25,12 @@ struct MainView: View {
         .modifier(EditAlerts(state: state))
         .task { await state.bootstrap() }
         .onAppear { installEscMonitor() }
+    }
+
+    private var subtitle: String {
+        guard let c = state.selectedConnection else { return "" }
+        let db = c.dialect == .sqlite ? nil : (c.database ?? state.currentDatabase)
+        return [c.name, db].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// Esc closes the inspector unless a text view (editor, field editor) is handling keys.
@@ -55,25 +53,6 @@ struct MainView: View {
 
 @MainActor private var escMonitorInstalled = false
 
-struct ConnectionBadge: View {
-    let state: AppState
-    var body: some View {
-        if let c = state.activeTab?.connection ?? state.selectedConnection {
-            HStack(spacing: 6) {
-                ConnDot(color: c.color, size: 8)
-                Text(c.name).fontWeight(.medium).lineLimit(1)
-                Text(c.readOnly ? "RO" : "RW")
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(c.readOnly ? Color.secondary.opacity(0.2) : Color.red.opacity(0.85), in: Capsule())
-                    .foregroundStyle(c.readOnly ? Color.secondary : Color.white)
-                EnvPill(env: c.env)
-            }
-            .help("\(c.name) · \(c.dialect.title) · \(c.readOnly ? "read-only" : "READ-WRITE")")
-        }
-    }
-}
-
 struct DetailView: View {
     @Bindable var state: AppState
 
@@ -91,37 +70,80 @@ struct DetailView: View {
                     case .query: QueryTabView(state: state, tab: tab).id(tab.id)
                     }
                 } else {
-                    ContentUnavailableView {
-                        Label("No tab open", systemImage: "tablecells")
-                    } description: {
-                        Text("Pick a table in the sidebar or start a SQL tab.")
-                    } actions: {
-                        Button("New SQL Tab") { state.openQuery() }.disabled(state.selectedConnection == nil)
-                    }
+                    EmptyTabState()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             StatusBar(state: state)
         }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+struct EmptyTabState: View {
+    private let shortcuts: [(String, String)] = [("⌘P", "Find table"), ("⌘T", "New query"), ("⇧⌘K", "Connections"), ("⌘Y", "History")]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "cylinder.split.1x2").font(.system(size: 48, weight: .light)).foregroundStyle(.tertiary)
+            Text("No table open").font(.title3.weight(.medium))
+            Text("Pick a table in the sidebar or start a new query.").font(.callout).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(shortcuts, id: \.0) { k, label in
+                    HStack(spacing: 12) {
+                        Text(k).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                            .frame(width: 36, alignment: .trailing)
+                        Text(label).font(.callout)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(width: 220)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor).opacity(0.6)))
+            .padding(.top, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 
 struct StatusBar: View {
     let state: AppState
+    @State private var showSQL = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             left
-            Spacer()
+            Spacer(minLength: 8)
+            if let t = state.activeTab, !t.isQuery {
+                Button { showSQL.toggle() } label: { Image(systemName: "info.circle").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+                    .help(t.buildSQL())
+                    .popover(isPresented: $showSQL, arrowEdge: .top) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Generated SQL").font(.caption).foregroundStyle(.secondary)
+                            Text(t.buildSQL()).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                                .frame(maxWidth: 480, alignment: .leading)
+                            HStack {
+                                Button("Copy") { copyToPasteboard(t.buildSQL()) }
+                                Button("Open in SQL Editor") { showSQL = false; state.openQuery(sql: t.buildSQL(), connection: t.connection) }
+                            }.controlSize(.small)
+                        }.padding(12)
+                    }
+            }
             if let c = state.activeTab?.connection ?? state.selectedConnection {
+                AccessPill(readOnly: c.readOnly)
                 ConnDot(color: c.color, size: 7)
-                Text([c.name, c.dialect == .sqlite ? nil : c.database, c.dialect.title].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(.secondary)
+                    .help([c.name, c.dialect == .sqlite ? nil : c.database, c.dialect.title].compactMap { $0 }.joined(separator: " · "))
             }
         }
         .font(.caption)
-        .padding(.horizontal, 10).padding(.vertical, 4)
-        .frame(height: 24)
+        .padding(.horizontal, 10)
+        .frame(height: 22)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     @ViewBuilder private var left: some View {
@@ -141,12 +163,13 @@ struct StatusBar: View {
             } else if let e = t.error {
                 Text(e.split(separator: "\n").first.map(String.init) ?? e).foregroundStyle(.red).lineLimit(1)
             } else if let r = t.result {
+                if !t.isQuery && !t.isExplain { pager(t, r) }
                 if let a = r.affected {
-                    Text("\(a) row(s) affected · \(formatElapsed(r.elapsed))").monospacedDigit()
+                    Text("\(a) row(s) affected · \(formatMs(r.elapsed))").monospacedDigit()
                 } else {
-                    Text("\(r.rows.count) rows · \(r.columns.count) cols · \(formatElapsed(r.elapsed))").monospacedDigit()
+                    Text("\(plural(r.rows.count, "row")) · \(plural(r.columns.count, "col")) · \(formatMs(r.elapsed))").monospacedDigit()
                     if r.truncated {
-                        Text(t.isQuery ? "· truncated to LIMIT — add WHERE or raise limit" : "· more rows — use › or raise limit")
+                        Text(t.isQuery ? "truncated to LIMIT — add WHERE or raise limit" : "more rows")
                             .foregroundStyle(.orange)
                     }
                 }
@@ -158,6 +181,18 @@ struct StatusBar: View {
         } else {
             Text(state.status.isEmpty ? "Ready" : state.status).foregroundStyle(state.status.isEmpty ? .secondary : Color.red).lineLimit(1)
         }
+    }
+
+    @ViewBuilder private func pager(_ t: WorkTab, _ r: QueryResult) -> some View {
+        let n = r.rows.count
+        HStack(spacing: 2) {
+            Button { state.page(t, by: -1) } label: { Image(systemName: "chevron.left").frame(width: 16, height: 16).contentShape(Rectangle()) }
+                .buttonStyle(.plain).disabled(t.offset == 0 || t.running).help("Previous page")
+            Text(n == 0 ? "0" : "\(t.offset + 1)–\(t.offset + n)").monospacedDigit().foregroundStyle(.secondary)
+            Button { state.page(t, by: 1) } label: { Image(systemName: "chevron.right").frame(width: 16, height: 16).contentShape(Rectangle()) }
+                .buttonStyle(.plain).disabled(!t.hasMore || t.running).help("Next page")
+        }
+        Divider().frame(height: 12)
     }
 }
 

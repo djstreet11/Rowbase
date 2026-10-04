@@ -29,10 +29,98 @@ struct EnvPill: View {
             Text(env)
                 .font(.system(size: 10, weight: .semibold))
                 .padding(.horizontal, 5).padding(.vertical, 1)
-                .background(env == "prod" ? Color.red.opacity(0.85) : Color.secondary.opacity(0.2), in: Capsule())
+                .background(env == "prod" ? Color.red.opacity(0.85) : Color.secondary.opacity(0.18), in: Capsule())
                 .foregroundStyle(env == "prod" ? Color.white : Color.secondary)
         }
     }
+}
+
+/// "Read-only" (secondary) / "Read-write" (red) capsule.
+struct AccessPill: View {
+    let readOnly: Bool
+    var short = false
+    var body: some View {
+        Text(readOnly ? (short ? "RO" : "Read-only") : (short ? "RW" : "Read-write"))
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(readOnly ? Color.secondary.opacity(0.18) : Color.red.opacity(0.85), in: Capsule())
+            .foregroundStyle(readOnly ? Color.secondary : Color.white)
+            .fixedSize()
+    }
+}
+
+/// Small caps section header ("TABLES  12").
+struct SectionLabel: View {
+    let title: String
+    var count: Int?
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title.uppercased()).font(.system(size: 10, weight: .semibold)).tracking(0.6)
+            if let count { Text("\(count)").font(.system(size: 10)).monospacedDigit().foregroundStyle(.tertiary) }
+        }
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// Borderless 24×22 icon button with a tooltip (used by all toolbars).
+struct IconButton: View {
+    let symbol: String
+    let help: String
+    var active = false
+    var action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12))
+                .foregroundStyle(active ? Color.accentColor : Color.secondary)
+                .frame(width: 26, height: 22)
+                .background(active ? Color.accentColor.opacity(0.14) : (hover ? Color.primary.opacity(0.07) : .clear), in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(help)
+    }
+}
+
+/// Look of a menu used as an icon button in the tab toolbars.
+struct IconMenuLabel: View {
+    let symbol: String
+    var active = false
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 12))
+            .foregroundStyle(active ? Color.accentColor : Color.secondary)
+            .frame(width: 26, height: 22)
+            .contentShape(Rectangle())
+    }
+}
+
+/// 1234 → "1.2K", 3_400_000 → "3.4M".
+func compactCount(_ n: Int) -> String {
+    let a = Double(abs(n))
+    func f(_ v: Double, _ suffix: String) -> String {
+        let s = v < 10 ? String(format: "%.1f", v) : String(format: "%.0f", v)
+        return (s.hasSuffix(".0") ? String(s.dropLast(2)) : s) + suffix
+    }
+    if a < 1000 { return String(n) }
+    if a < 1_000_000 { return f(a / 1000, "K") }
+    if a < 1_000_000_000 { return f(a / 1_000_000, "M") }
+    return f(a / 1_000_000_000, "B")
+}
+
+/// Numeric column types that get right-aligned monospaced digits in the grid.
+func isNumericType(_ type: String) -> Bool {
+    let t = type.lowercased().trimmingCharacters(in: .whitespaces)
+    let base = t.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+    if base == "tinyint" {  // tinyint(1) is a boolean in MySQL
+        guard let o = t.firstIndex(of: "("), let c = t.firstIndex(of: ")"), o < c else { return true }
+        return (Int(t[t.index(after: o)..<c]) ?? 4) > 1
+    }
+    let nums: Set<Substring> = ["int", "integer", "bigint", "smallint", "mediumint", "decimal", "numeric", "float", "double", "real",
+                                "serial", "bigserial", "smallserial", "int2", "int4", "int8", "float4", "float8", "money"]
+    return nums.contains(base)
 }
 
 func copyToPasteboard(_ s: String) {
@@ -41,6 +129,10 @@ func copyToPasteboard(_ s: String) {
 }
 
 func formatElapsed(_ e: Double) -> String { String(format: "%.3f s", e) }
+
+func formatMs(_ e: Double) -> String {
+    e < 1 ? String(format: "%.0f ms", e * 1000) : String(format: "%.2f s", e)
+}
 
 enum Export {
     static func tsv(columns: [String], rows: [[String?]], header: Bool = true) -> String {

@@ -10,17 +10,22 @@ struct SidebarView: View {
             if state.connections.isEmpty {
                 emptyState
             } else {
-                header
+                searchField
                 if state.needsDatabase { databaseChooser } else { tableList }
             }
             Divider()
-            HStack {
-                Button { state.showConnections = true } label: { Label("Connections…", systemImage: "externaldrive.connected.to.line.below") }
-                    .buttonStyle(.borderless).controlSize(.small)
+            HStack(spacing: 4) {
+                Button { state.showConnections = true } label: { Image(systemName: "plus").frame(width: 22, height: 20).contentShape(Rectangle()) }
+                    .buttonStyle(.borderless).help("New Connection")
+                Button { state.showConnections = true } label: {
+                    Label("Connections", systemImage: "externaldrive.connected.to.line.below")
+                }
+                .buttonStyle(.borderless).help("Manage Connections (⇧⌘K)")
                 Spacer()
                 if state.tablesLoading { ProgressView().controlSize(.mini) }
             }
-            .padding(8)
+            .controlSize(.small)
+            .padding(.horizontal, 8).frame(height: 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -38,47 +43,22 @@ struct SidebarView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Menu {
-                ForEach(state.connections) { c in
-                    Button { state.selectConnection(c.id) } label: {
-                        Text(c.env.map { "\(c.name)  [\($0)]" } ?? c.name)
-                    }
-                }
-                Divider()
-                Button("Connections…") { state.showConnections = true }
-            } label: {
-                HStack(spacing: 6) {
-                    ConnDot(color: state.selectedConnection?.color)
-                    Text(state.selectedConnection?.name ?? "Select connection").fontWeight(.medium).lineLimit(1)
-                    EnvPill(env: state.selectedConnection?.env)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
+    private var searchField: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+            TextField("Search tables", text: $state.tableFilter)
+                .textFieldStyle(.plain).focused($filterFocused)
+                .onSubmit { if let f = state.filteredTables.first { state.openTable(f.name) } }
+            if !state.tableFilter.isEmpty {
+                Button { state.tableFilter = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.tertiary).help("Clear")
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden)
-
-            if let c = state.selectedConnection, c.dialect != .sqlite { databaseMenu(c) }
-            if let c = state.selectedConnection, !c.readOnly {
-                Label("READ-WRITE", systemImage: "pencil").font(.caption.weight(.bold)).foregroundStyle(.red)
-            }
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Filter tables", text: $state.tableFilter)
-                    .textFieldStyle(.plain).focused($filterFocused)
-                    .onSubmit { if let f = state.filteredTables.first { state.openTable(f.name) } }
-                if !state.tableFilter.isEmpty {
-                    Button { state.tableFilter = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                }
-                kindMenu
-            }
-            .padding(.horizontal, 6).padding(.vertical, 4)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            kindMenu
         }
-        .padding(8)
+        .font(.callout)
+        .padding(.horizontal, 8).frame(height: 24)
+        .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, 10).padding(.vertical, 8)
     }
 
     /// All / Tables / Views filter (persisted).
@@ -96,41 +76,6 @@ struct SidebarView: View {
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         .help("Show: \(state.kindFilter == "all" ? "all" : state.kindFilter == "table" ? "tables only" : "views only")")
-    }
-
-    /// Database switcher: lists server databases; the choice overrides the connection's configured database.
-    private func databaseMenu(_ c: Connection) -> some View {
-        let configured = state.connections.first { $0.id == c.id }?.database
-        let user = state.databases.filter { !Catalog.systemDatabases.contains($0) }
-        let system = state.databases.filter { Catalog.systemDatabases.contains($0) }
-        return Menu {
-            if let configured, !configured.isEmpty {
-                Button("Default (\(configured))") { state.selectDatabase(nil) }
-                Divider()
-            }
-            ForEach(user, id: \.self) { db in dbButton(db, current: c.database) }
-            if !system.isEmpty {
-                Section("System") { ForEach(system, id: \.self) { db in dbButton(db, current: c.database) } }
-            }
-            if state.databases.isEmpty { Text("No databases visible") }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "cylinder.split.1x2").foregroundStyle(.secondary).frame(width: 16)
-                Text(c.database ?? state.currentDatabase ?? "Choose database…")
-                    .foregroundStyle(state.needsDatabase ? Color.accentColor : .primary).lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
-            }
-            .font(.callout).contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden)
-        .help("Switch database")
-    }
-
-    private func dbButton(_ db: String, current: String?) -> some View {
-        Button { state.selectDatabase(db) } label: {
-            if db == current { Label(db, systemImage: "checkmark") } else { Text(db) }
-        }
     }
 
     /// Shown instead of the table list when a MySQL connection has no database yet.
@@ -156,23 +101,20 @@ struct SidebarView: View {
     }
 
     private var tableList: some View {
-        List(selection: Binding<String?>(
+        let all = state.filteredTables
+        let tables = all.filter { !$0.isView }, views = all.filter(\.isView)
+        return List(selection: Binding<String?>(
             get: {
                 guard let t = state.activeTab, t.connection.id == state.selectedConnectionID else { return nil }
                 return t.tableName
             },
             set: { if let n = $0 { state.openTable(n) } }
         )) {
-            ForEach(state.filteredTables) { t in
-                HStack(spacing: 6) {
-                    Image(systemName: t.isView ? "eye" : "tablecells").foregroundStyle(.secondary).frame(width: 16)
-                    Text(t.name).lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 4)
-                    if let n = t.rows {
-                        Text(n.formatted()).font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                .tag(t.name)
+            if !tables.isEmpty {
+                Section { ForEach(tables) { row($0) } } header: { SectionLabel(title: "Tables", count: tables.count) }
+            }
+            if !views.isEmpty {
+                Section { ForEach(views) { row($0) } } header: { SectionLabel(title: "Views", count: views.count) }
             }
         }
         .listStyle(.sidebar)
@@ -180,7 +122,26 @@ struct SidebarView: View {
         .overlay {
             if state.tables.isEmpty && !state.tablesLoading {
                 Text(state.status.isEmpty ? "No tables" : state.status).font(.caption).foregroundStyle(.secondary).padding()
+            } else if all.isEmpty && !state.tablesLoading {
+                Text("No matches").font(.caption).foregroundStyle(.secondary).padding()
             }
         }
+    }
+
+    private func row(_ t: TableEntry) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: t.isView ? "eye" : "tablecells")
+                .font(.system(size: 12))
+                .foregroundStyle(t.isView ? Color.purple : Color.accentColor).frame(width: 16)
+            Text(t.name).lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 4)
+            if let n = t.rows {
+                Text(compactCount(n)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .help(n.formatted() + " rows")
+            }
+        }
+        .frame(height: 24)
+        .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+        .tag(t.name)
     }
 }

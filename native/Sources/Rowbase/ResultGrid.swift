@@ -20,8 +20,15 @@ struct ResultArea: View {
         ZStack {
             if let e = tab.error {
                 ScrollView {
-                    Text(e).font(.system(size: 12, design: .monospaced)).foregroundStyle(.red)
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).padding(.top, 1)
+                        Text(e).font(.system(size: 12, design: .monospaced)).foregroundStyle(.red)
+                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(10)
+                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.red.opacity(0.25)))
+                    .padding(12)
                 }
             } else if let r = tab.result {
                 if let a = r.affected, r.columns.isEmpty {
@@ -45,10 +52,11 @@ struct ResultArea: View {
                 Text(tab.isQuery ? "Write a query and press ⌘↩" : "").foregroundStyle(.tertiary)
             }
             if tab.running {
-                ProgressView().controlSize(.small).padding(10).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                ProgressView().controlSize(.small).padding(10)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 
@@ -79,6 +87,39 @@ final class GridTableView: NSTableView {
     var onSpace: (() -> Void)?
     var menuProvider: ((NSPoint) -> NSMenu?)?
     var onReturn: (() -> Bool)?
+    private(set) var hoverRow = -1
+
+    override func drawBackground(inClipRect clipRect: NSRect) {
+        backgroundColor.setFill()
+        clipRect.fill()
+        let alts = NSColor.alternatingContentBackgroundColors
+        guard alts.count > 1, numberOfRows > 0 else { return }
+        let rs = rows(in: clipRect)
+        guard rs.length > 0 else { return }
+        alts[1].setFill()
+        for r in rs.location..<NSMaxRange(rs) where r % 2 == 1 { rect(ofRow: r).intersection(clipRect).fill() }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for a in trackingAreas where a.owner === self { removeTrackingArea(a) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHover(row(at: convert(event.locationInWindow, from: nil)))
+    }
+    override func mouseExited(with event: NSEvent) { super.mouseExited(with: event); setHover(-1) }
+
+    private func setHover(_ r: Int) {
+        guard r != hoverRow else { return }
+        let old = hoverRow
+        hoverRow = r
+        for row in [old, r] where row >= 0 {
+            for c in 0..<numberOfColumns { (view(atColumn: c, row: row, makeIfNecessary: false) as? GridCell)?.hover = row == hoverRow }
+        }
+    }
 
     @objc func copy(_ sender: Any?) { onCopy?() }
 
@@ -98,10 +139,54 @@ final class GridTableView: NSTableView {
     }
 }
 
+/// Small rounded "NULL" capsule in tertiary color.
+final class NullPill: NSView {
+    let label = NSTextField(labelWithString: "NULL")
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        label.font = .systemFont(ofSize: 9, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        layer?.cornerRadius = 4
+        layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 final class GridCell: NSTableCellView {
     let label = NSTextField(labelWithString: "")
+    private let pill = NullPill()
+    private let link = NSImageView()
+    private var labelTrailing: NSLayoutConstraint!
+    private var pillLeading: NSLayoutConstraint!
+    private var pillTrailing: NSLayoutConstraint!
     /// Background tint for edited cells (re-resolved on appearance change).
     var tint: NSColor? { didSet { applyTint() } }
+    /// FK value: shows a small arrow glyph while the row is hovered.
+    var isFK = false { didSet { updateLink() } }
+    var hover = false { didSet { updateLink() } }
+
+    private func updateLink() {
+        link.isHidden = !(isFK && hover)
+        labelTrailing.constant = isFK ? -16 : -8
+    }
+
+    func setNull(_ on: Bool, right: Bool) {
+        pill.isHidden = !on
+        pillLeading.isActive = !right
+        pillTrailing.isActive = right
+    }
 
     private func applyTint() {
         effectiveAppearance.performAsCurrentDrawingAppearance { layer?.backgroundColor = tint?.cgColor }
@@ -109,6 +194,7 @@ final class GridCell: NSTableCellView {
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); applyTint() }
 
     func beginEditing(text: String, font: NSFont) {
+        pill.isHidden = true
         label.isEditable = true
         label.isSelectable = true
         label.drawsBackground = true
@@ -136,13 +222,57 @@ final class GridCell: NSTableCellView {
         label.maximumNumberOfLines = 1
         addSubview(label)
         textField = label
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.isHidden = true
+        addSubview(pill)
+        let cfg = NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)
+        link.image = NSImage(systemSymbolName: "arrow.up.right", accessibilityDescription: "Follow reference")?.withSymbolConfiguration(cfg)
+        link.contentTintColor = .linkColor
+        link.isHidden = true
+        link.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(link)
+        labelTrailing = label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8)
+        pillLeading = pill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4)
+        pillTrailing = pill.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)
+        pillTrailing.isActive = false
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            labelTrailing,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            pillLeading,
+            pill.centerYAnchor.constraint(equalTo: centerYAnchor),
+            pill.heightAnchor.constraint(equalToConstant: 14),
+            link.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            link.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
+}
+
+/// Two-line column header: name (semibold 11) with the type below in tertiary 10pt.
+final class GridHeaderCell: NSTableHeaderCell {
+    var name = ""
+    var typeText = ""
+    var numeric = false
+    var dim = false
+
+    override func drawInterior(withFrame f: NSRect, in v: NSView) {
+        // The header view paints a copy of the last cell over the empty filler area: only draw real columns.
+        guard let hv = v as? NSTableHeaderView, hv.tableView?.tableColumns.contains(where: { $0.headerCell === self }) == true else { return }
+        let ps = NSMutableParagraphStyle()
+        ps.lineBreakMode = .byTruncatingTail
+        ps.alignment = numeric ? .right : .left
+        let n = NSAttributedString(string: name, attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor, .paragraphStyle: ps])
+        let t = NSAttributedString(string: typeText, attributes: [.font: NSFont.systemFont(ofSize: 10),
+            .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: ps])
+        let x = f.minX + 6, w = max(0, f.width - 12 - (numeric ? 0 : 10))
+        let nh: CGFloat = 14, th: CGFloat = typeText.isEmpty ? 0 : 13
+        var y = f.minY + (f.height - nh - th) / 2
+        n.draw(in: NSRect(x: x, y: y, width: w, height: nh))
+        y += nh
+        if th > 0 { t.draw(in: NSRect(x: x, y: y, width: w, height: th)) }
+    }
 }
 
 /// Row view that tints rows flagged by the MySQL EXPLAIN check (full table scan).
@@ -185,13 +315,17 @@ struct ResultGrid: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let c = context.coordinator
         let tv = GridTableView()
-        tv.usesAlternatingRowBackgroundColors = true
+        tv.usesAlternatingRowBackgroundColors = false
+        tv.backgroundColor = .textBackgroundColor
+        tv.gridStyleMask = [.solidVerticalGridLineMask]
+        tv.gridColor = NSColor(white: 0.5, alpha: 0.16)
+        tv.headerView?.frame.size.height = 34
         tv.allowsMultipleSelection = true
         tv.allowsColumnResizing = true
         tv.allowsColumnReordering = true
         tv.columnAutoresizingStyle = .noColumnAutoresizing
-        tv.rowHeight = 20
-        tv.intercellSpacing = NSSize(width: 6, height: 0)
+        tv.rowHeight = 22
+        tv.intercellSpacing = NSSize(width: 1, height: 0)
         tv.style = .plain
         tv.dataSource = c
         tv.delegate = c
@@ -208,7 +342,8 @@ struct ResultGrid: NSViewRepresentable {
         sv.hasVerticalScroller = true
         sv.hasHorizontalScroller = true
         sv.autohidesScrollers = true
-        sv.drawsBackground = false
+        sv.drawsBackground = true
+        sv.backgroundColor = .textBackgroundColor
         return sv
     }
 
@@ -241,6 +376,7 @@ struct ResultGrid: NSViewRepresentable {
         private var insertCount = 0
         private var colKey = ""
         private var fkCols: Set<Int> = []
+        private var numCols: Set<Int> = []
         private var menuColumn = -1, menuRow = -1
         private var lastClickedColumn = -1
         private var sorting = false
@@ -266,8 +402,14 @@ struct ResultGrid: NSViewRepresentable {
                 tys.append(ci?.type ?? "")
             }
             let visible = result.columns.indices.filter { !hidden.contains(result.columns[$0]) }
+            var num: Set<Int> = []
+            for i in result.columns.indices {
+                if !tys[i].isEmpty { if isNumericType(tys[i]) { num.insert(i) }; continue }
+                let vals = result.rows.prefix(60).compactMap { i < $0.count ? $0[i] : nil }
+                if !vals.isEmpty, vals.allSatisfy({ $0.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil }) { num.insert(i) }
+            }
             let key = zip(result.columns, tys).map { "\($0)\u{1}\($1)" }.joined(separator: "\u{2}")
-                + "|\(fk.sorted())|T\(tp)|V\(visible)|E\(explain)"
+                + "|\(fk.sorted())|N\(num.sorted())|T\(tp)|V\(visible)|E\(explain)"
             let dataChanged = v != version
             let pendingChanged = pending != pendingV
             guard dataChanged || key != colKey || pendingChanged else { return }
@@ -277,6 +419,7 @@ struct ResultGrid: NSViewRepresentable {
             types = tys
             rows = result.rows
             fkCols = fk
+            numCols = num
             vis = visible
             transpose = tp
             typeI = explain ? columns.firstIndex(of: "type") ?? -1 : -1
@@ -294,6 +437,12 @@ struct ResultGrid: NSViewRepresentable {
             else if grew { tv.scrollRowToVisible(0) }
         }
 
+        private func header(_ name: String, type: String, numeric: Bool, dim: Bool = false) -> GridHeaderCell {
+            let h = GridHeaderCell(textCell: name)
+            h.name = name; h.typeText = type; h.numeric = numeric; h.dim = dim
+            return h
+        }
+
         private func textWidth(_ s: String, _ f: NSFont) -> CGFloat { (s as NSString).size(withAttributes: [.font: f]).width }
 
         private func rebuildColumns(_ tv: GridTableView) {
@@ -305,16 +454,18 @@ struct ResultGrid: NSViewRepresentable {
             if transpose { return rebuildTransposed(tv, headerFont) }
             let num = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("#"))
             num.title = "#"
-            num.width = 48; num.minWidth = 36; num.maxWidth = 100
+            num.width = 44; num.minWidth = 36; num.maxWidth = 100
+            num.headerCell = header("#", type: "", numeric: true, dim: true)
             tv.addTableColumn(num)
             for i in vis {
                 let name = columns[i]
                 let c = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("c\(i)"))
                 c.title = name
+                c.headerCell = header(name, type: types[i], numeric: numCols.contains(i))
                 c.minWidth = 50
                 c.sortDescriptorPrototype = NSSortDescriptor(key: "c\(i)", ascending: true)
                 c.headerToolTip = types[i].isEmpty ? name : "\(name): \(types[i])"
-                var w = textWidth(name, headerFont) + 28
+                var w = max(textWidth(name, headerFont), textWidth(types[i], NSFont.systemFont(ofSize: 10))) + 28
                 for r in rows.prefix(60) where i < r.count {
                     if let v = r[i] { w = max(w, textWidth(String(v.prefix(80)), font) + 16) }
                 }
@@ -327,6 +478,7 @@ struct ResultGrid: NSViewRepresentable {
         private func rebuildTransposed(_ tv: GridTableView, _ headerFont: NSFont) {
             let f = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("f"))
             f.title = "Field"
+            f.headerCell = header("Field", type: "", numeric: false)
             f.minWidth = 80
             var fw: CGFloat = 60
             for i in vis { fw = max(fw, textWidth(columns[i], NSFont.systemFont(ofSize: 11, weight: .semibold)) + 16) }
@@ -336,6 +488,7 @@ struct ResultGrid: NSViewRepresentable {
             for (ri, row) in rows.enumerated() {
                 let c = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("r\(ri)"))
                 c.title = String(rowOffset + ri + 1)
+                c.headerCell = header(c.title, type: "", numeric: false)
                 c.minWidth = 50
                 c.headerToolTip = "All fields of the row"
                 var w: CGFloat = textWidth(c.title, headerFont) + 28
@@ -424,7 +577,9 @@ struct ResultGrid: NSViewRepresentable {
 
         private func style(_ cell: GridCell, value v: String?, column ci: Int, edited: Bool = false, strike: Bool = false, blank: Bool = false) {
             let l = cell.label
-            l.alignment = .left
+            let right = !transpose && numCols.contains(ci)
+            l.alignment = right ? .right : .left
+            cell.setNull(false, right: right)
             cell.tint = edited ? NSColor.systemYellow.withAlphaComponent(0.34) : nil
             if let v {
                 let bad = isBad(ci, v)
@@ -439,9 +594,9 @@ struct ResultGrid: NSViewRepresentable {
                 l.stringValue = ""
                 cell.toolTip = nil
             } else {
-                l.font = nullFont
-                l.textColor = strike ? .secondaryLabelColor : .tertiaryLabelColor
-                l.stringValue = "NULL"
+                l.font = font
+                l.stringValue = ""
+                cell.setNull(true, right: right)
                 cell.toolTip = nil
             }
             if strike {
@@ -460,6 +615,9 @@ struct ResultGrid: NSViewRepresentable {
             cell.endEditing()
             let id = tableColumn.identifier.rawValue
             let l = cell.label
+            cell.setNull(false, right: false)
+            cell.isFK = false
+            cell.hover = false
             if transpose {
                 cell.tint = nil
                 guard row < vis.count else { return cell }
@@ -480,13 +638,15 @@ struct ResultGrid: NSViewRepresentable {
             if id == "#" {
                 cell.tint = nil
                 l.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                l.textColor = .secondaryLabelColor
+                l.textColor = .tertiaryLabelColor
                 l.stringValue = o.map { String(rowOffset + $0 + 1) } ?? "+"
                 l.alignment = .right
                 cell.toolTip = nil
                 return cell
             }
             let ci = Int(id.dropFirst()) ?? 0
+            cell.isFK = o != nil && fkCols.contains(ci)
+            cell.hover = row == (tableView as? GridTableView)?.hoverRow
             if let o {
                 style(cell, value: ci < columns.count ? cellValue(o, ci) : nil, column: ci,
                       edited: ci < columns.count && tab?.isEdited(row: o, column: columns[ci]) == true,

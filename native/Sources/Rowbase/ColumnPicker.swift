@@ -1,24 +1,21 @@
 import SwiftUI
 import RowbaseCore
 
-/// Toolbar button "Columns N/M" (accent-filled while some columns are hidden) with the picker popover.
+/// Icon toolbar button (accent dot while some columns are hidden) with the picker popover.
 struct ColumnsButton: View {
     @Bindable var tab: WorkTab
 
     var body: some View {
         let cols = tab.allColumns
         let shown = cols.filter { !tab.hidden.contains($0) }.count
-        let title = cols.isEmpty ? "Columns" : "Columns \(shown)/\(cols.count)"
-        Group {
-            if !cols.isEmpty && shown < cols.count {
-                Button { tab.columnPickerOpen.toggle() } label: { Label(title, systemImage: "rectangle.split.3x1") }
-                    .buttonStyle(.borderedProminent)
-            } else {
-                Button { tab.columnPickerOpen.toggle() } label: { Label(title, systemImage: "rectangle.split.3x1") }
-            }
+        let partial = !cols.isEmpty && shown < cols.count
+        IconButton(symbol: "slider.horizontal.3", help: cols.isEmpty ? "Columns" : "Columns — \(shown) of \(cols.count) shown", active: false) {
+            tab.columnPickerOpen.toggle()
+        }
+        .overlay(alignment: .topTrailing) {
+            if partial { Circle().fill(Color.accentColor).frame(width: 6, height: 6).offset(x: -3, y: 3) }
         }
         .disabled(cols.isEmpty)
-        .help("Show or hide columns")
         .popover(isPresented: $tab.columnPickerOpen, arrowEdge: .bottom) { ColumnPicker(tab: tab) }
     }
 }

@@ -125,7 +125,8 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
   tables/views filter, history errors filter, MySQL EXPLAIN highlight). Editing + export in both tracks.
 - **Gaps (both)**: no structure (DDL) editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
   (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
-- **Distribution (later)**: Developer ID + notarization, Sparkle. App Store not planned (sandbox vs shared store/SSH).
+- **Distribution**: `native/scripts/release.sh` → DMG (app + Applications link + volume icon), generated app icon, version in
+  `native/VERSION`; Developer ID signing + notarization opt-in via env (docs/RELEASING.md). Sparkle later. No App Store (sandbox).
 
 ### 4.3 Future: Linux / Windows
 Options: (a) Python track + `pywebview` native window, (b) Tauri shell around the web UI, (c) Compose Desktop / Avalonia.
@@ -163,7 +164,7 @@ Deferred; keep contracts (§5) portable.
 | 1b — Python polish | query cancel, SSH tunnel, CSV/SQL export, server-side sort, virtualized grid, i18n (en/ru/uk) | next |
 | 2 — Native MVP | Swift app: connection manager (Keychain), MySQL+PG+SQLite, sidebar, virtualized grid, SQL editor, history, guard | ✅ 2026-10-04 |
 | 3 — Native parity+ | autocomplete, FK navigation, transpose, inspector, export, editing w/ pending changes, SSH, command palette | |
-| 4 — Ship | signing/notarization, DMG, auto-update, onboarding, import from TablePlus | |
+| 4 — Ship | signing/notarization, DMG, auto-update, onboarding, import from TablePlus | 🟡 DMG + pipeline 2026-10-04; needs Developer ID |
 | 5 — Beyond | ER diagrams, AI assistant, MCP server, Linux/Windows | |
 
 ## 7. Open questions

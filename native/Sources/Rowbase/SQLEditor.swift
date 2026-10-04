@@ -16,8 +16,8 @@ enum SQLHighlighter {
     static let plain = make(false)
     static let mysql = make(true)
 
-    static let baseFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-    static let boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+    static let baseFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    static let boldFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
 
     static func apply(to storage: NSTextStorage, dialect: Dialect) {
         let text = storage.string
@@ -42,8 +42,95 @@ enum SQLHighlighter {
     }
 }
 
+/// Line-number gutter: tertiary monospaced digits on the text background, thin right border.
+final class LineNumberRuler: NSRulerView {
+    private var textView: NSTextView? { clientView as? NSTextView }
+    private let font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+
+    init(scrollView: NSScrollView, textView: NSTextView) {
+        super.init(scrollView: scrollView, orientation: .verticalRuler)
+        clientView = textView
+        ruleThickness = 40
+        NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: NSText.didChangeNotification, object: textView)
+    }
+    required init(coder: NSCoder) { fatalError() }
+
+    @objc private func refresh() {
+        guard let tv = textView else { return }
+        let digits = max(2, String(tv.string.reduce(1) { $1 == "\n" ? $0 + 1 : $0 }).count)
+        let w = CGFloat(digits) * 7 + 18
+        if abs(w - ruleThickness) > 0.5 { ruleThickness = w }
+        needsDisplay = true
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.textBackgroundColor.setFill()
+        bounds.fill()
+        NSColor.separatorColor.setFill()
+        NSRect(x: bounds.maxX - 1, y: 0, width: 1, height: bounds.height).fill()
+        drawHashMarksAndLabels(in: dirtyRect)
+    }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let tv = textView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+        let ns = tv.string as NSString
+        let origin = tv.textContainerOrigin
+        let visible = tv.visibleRect
+        let caretLine = ns.substring(to: min(tv.selectedRange().location, ns.length)).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        func label(_ n: Int, y: CGFloat, h: CGFloat) {
+            let attrs: [NSAttributedString.Key: Any] = [.font: font,
+                .foregroundColor: n == caretLine ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor]
+            let str = NSAttributedString(string: String(n), attributes: attrs)
+            let sz = str.size()
+            let py = convert(NSPoint(x: 0, y: y), from: tv).y + (h - sz.height) / 2
+            str.draw(at: NSPoint(x: bounds.maxX - 8 - sz.width, y: py))
+        }
+        let glyphs = lm.glyphRange(forBoundingRect: visible.offsetBy(dx: -origin.x, dy: -origin.y), in: tc)
+        var line = 1
+        if glyphs.location > 0 {
+            let chars = lm.characterRange(forGlyphRange: NSRange(location: 0, length: glyphs.location), actualGlyphRange: nil)
+            line = ns.substring(with: chars).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        }
+        var idx = glyphs.location
+        while idx < NSMaxRange(glyphs) {
+            var lr = NSRange()
+            let r = lm.lineFragmentRect(forGlyphAt: idx, effectiveRange: &lr)
+            let chars = lm.characterRange(forGlyphRange: lr, actualGlyphRange: nil)
+            if chars.location == 0 || ns.character(at: chars.location - 1) == 10 { label(line, y: r.minY + origin.y, h: r.height) }
+            if chars.length > 0, ns.character(at: NSMaxRange(chars) - 1) == 10 { line += 1 }
+            idx = NSMaxRange(lr)
+        }
+        if tv.string.isEmpty || ns.hasSuffix("\n") {
+            let r = lm.extraLineFragmentRect
+            if r.height > 0 { label(line, y: r.minY + origin.y, h: r.height) }
+            else if tv.string.isEmpty { label(1, y: origin.y, h: font.pointSize + 6) }
+        }
+    }
+}
+
 final class SQLTextView: NSTextView {
     var completer: Completer?
+
+    /// Subtle highlight of the caret's line.
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard selectedRange().length == 0, let lm = layoutManager, window?.firstResponder === self else { return }
+        let ns = string as NSString
+        let loc = selectedRange().location
+        var r: NSRect
+        if loc >= ns.length, ns.length == 0 || ns.hasSuffix("\n") { r = lm.extraLineFragmentRect }
+        else {
+            let g = lm.glyphIndexForCharacter(at: min(loc, max(0, ns.length - 1)))
+            r = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+        }
+        guard r.height > 0 else { return }
+        r.origin.y += textContainerOrigin.y
+        r.origin.x = 0; r.size.width = bounds.width
+        NSColor.labelColor.withAlphaComponent(0.05).setFill()
+        r.fill()
+    }
 
     override func keyDown(with event: NSEvent) {
         if let c = completer, c.isOpen {
@@ -114,7 +201,7 @@ struct SQLEditor: NSViewRepresentable {
         tv.isContinuousSpellCheckingEnabled = false
         tv.isGrammarCheckingEnabled = false
         tv.smartInsertDeleteEnabled = false
-        tv.textContainerInset = NSSize(width: 6, height: 8)
+        tv.textContainerInset = NSSize(width: 8, height: 8)
         tv.isHorizontallyResizable = true
         tv.textContainer?.widthTracksTextView = false
         tv.textContainer?.containerSize = NSSize(width: 1_000_000, height: 1_000_000)
@@ -129,6 +216,9 @@ struct SQLEditor: NSViewRepresentable {
         context.coordinator.completer = completer
         context.coordinator.textView = tv
         tab.editor = tv
+        sv.verticalRulerView = LineNumberRuler(scrollView: sv, textView: tv)
+        sv.hasVerticalRuler = true
+        sv.rulersVisible = true
         DispatchQueue.main.async { tv.window?.makeFirstResponder(tv) }
         return sv
     }
@@ -170,7 +260,11 @@ struct SQLEditor: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
-            if let tv = notification.object as? NSTextView { tab.selection = tv.selectedRange() }
+            if let tv = notification.object as? NSTextView {
+                tab.selection = tv.selectedRange()
+                tv.needsDisplay = true
+                tv.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+            }
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

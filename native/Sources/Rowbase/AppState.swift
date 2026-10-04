@@ -464,6 +464,7 @@ final class AppState {
     func runSnapshotIfRequested() async {
         let env = ProcessInfo.processInfo.environment
         guard let path = env["ROWBASE_SNAPSHOT"], !path.isEmpty else { return }
+        if env["ROWBASE_SNAPSHOT_DARK"] == "1" { NSApp.appearance = NSAppearance(named: .darkAqua) }
         if let name = env["ROWBASE_SNAPSHOT_CONN"], let c = connections.first(where: { $0.name.lowercased() == name.lowercased() }) {
             selectedConnectionID = c.id
             tables = []
@@ -535,8 +536,27 @@ final class AppState {
             }
         }
         func render(_ w: NSWindow, to p: String) {
-            guard let v = w.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { return }
-            v.cacheDisplay(in: v.bounds, to: rep)
+            // Theme frame (contentView.superview) includes titlebar + toolbar chrome; the content view is drawn
+            // on top explicitly because SwiftUI-hosted content is not always part of the theme frame's cache pass.
+            guard let content = w.contentView else { return }
+            let frameView = content.superview ?? content
+            guard let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else { return }
+            frameView.cacheDisplay(in: frameView.bounds, to: rep)
+            if frameView !== content, let crep = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
+                content.cacheDisplay(in: content.bounds, to: crep)
+                let img = NSImage(size: frameView.bounds.size)
+                img.addRepresentation(rep)
+                let out = NSImage(size: frameView.bounds.size)
+                out.lockFocus()
+                img.draw(in: NSRect(origin: .zero, size: frameView.bounds.size))
+                let cimg = NSImage(size: content.bounds.size)
+                cimg.addRepresentation(crep)
+                let f = content.convert(content.bounds, to: frameView)
+                cimg.draw(in: f)
+                out.unlockFocus()
+                if let tiff = out.tiffRepresentation, let r2 = NSBitmapImageRep(data: tiff),
+                   let png = r2.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: p)); return }
+            }
             if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: p)) }
         }
         let main = NSApp.windows.first(where: { $0.canBecomeMain && $0.sheetParent == nil })

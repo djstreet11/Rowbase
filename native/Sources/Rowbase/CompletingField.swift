@@ -4,6 +4,15 @@ import RowbaseCore
 
 /// Single-line SQL fragment field (WHERE / ORDER BY) with the editor's completion popup.
 /// Enter accepts the highlighted suggestion while the popup is open, otherwise submits.
+final class FocusTextField: NSTextField {
+    var onFocus: ((Bool) -> Void)?
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { onFocus?(true) }
+        return ok
+    }
+}
+
 struct CompletingField: NSViewRepresentable {
     enum Mode { case whereClause, orderBy }
 
@@ -13,15 +22,20 @@ struct CompletingField: NSViewRepresentable {
     let tab: WorkTab
     let state: AppState
     var onSubmit: () -> Void
+    /// Drawn by the caller (flat, borderless field): focus changes let it highlight its container.
+    var onFocus: ((Bool) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSTextField {
-        let f = NSTextField(string: text)
+        let f = FocusTextField(string: text)
         f.placeholderString = placeholder
-        f.isBezeled = true
-        f.bezelStyle = .roundedBezel
+        f.isBezeled = false
+        f.isBordered = false
+        f.drawsBackground = false
+        f.focusRingType = .none
         f.controlSize = .small
+        f.onFocus = { [weak coordinator = context.coordinator] v in coordinator?.parent.onFocus?(v) }
         f.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         f.cell?.isScrollable = true
         f.cell?.wraps = false
@@ -108,7 +122,7 @@ struct CompletingField: NSViewRepresentable {
             completer.update(force: false)
         }
 
-        func controlTextDidEndEditing(_ n: Notification) { completer.close() }
+        func controlTextDidEndEditing(_ n: Notification) { completer.close(); parent.onFocus?(false) }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
             completer.tv = textView

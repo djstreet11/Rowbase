@@ -64,3 +64,6 @@ short: facts and rules only, no history.
 - 2026-10-04: Swift: "\r\n" is ONE Character — test unicodeScalars when matching CR/LF (CSV export bug caught by shared vectors).
 - 2026-10-04: Cross-track behaviour is pinned by shared JSON vectors (guard, export) — prefer that pattern for any new shared format.
 - 2026-10-04: Delegated UI can't be clicked in snapshots → add a snapshot hook that drives the real code path (e.g. ROWBASE_SNAPSHOT_SAVE) and verify the DB.
+- 2026-10-04: MariaDB has no EXPLAIN ANALYZE → engines rewrite to `ANALYZE <stmt>` (detected via VERSION()).
+- 2026-10-04: User wants a professional, TablePlus-level look; design decisions recorded in native-app skill — reuse them.
+- 2026-10-04: No Developer ID cert on this Mac → DMG is ad-hoc; notarization pipeline ready (docs/RELEASING.md), needs user's Apple account.

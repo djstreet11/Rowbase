@@ -8,18 +8,9 @@ struct TableTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             if !tab.breadcrumbs.isEmpty { crumbs; Divider() }
-            VStack(spacing: 6) {
-                row1
-                row2
-                if tab.canEdit { EditToolbar(state: state, tab: tab) }
-                Text(tab.buildSQL())
-                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.tail).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .controlSize(.small)
-            .padding(.horizontal, 10).padding(.vertical, 8)
+            toolbar
             Divider()
+            if tab.canEdit { PendingStrip(state: state, tab: tab) }
             if tab.showStructure {
                 StructureView(state: state, tab: tab)
             } else {
@@ -48,66 +39,111 @@ struct TableTabView: View {
         }
     }
 
-    private var row1: some View {
+    private var toolbar: some View {
         HStack(spacing: 8) {
-            Picker("", selection: $tab.showStructure) {
-                Text("Data").tag(false)
-                Text("Structure").tag(true)
+            ModeSegment(structure: $tab.showStructure)
+            SQLFilterField(text: $tab.whereText, placeholder: "Filter — WHERE …", icon: "line.3.horizontal.decrease",
+                           mode: .whereClause, tab: tab, state: state, onSubmit: apply)
+                .frame(minWidth: 120, maxWidth: .infinity)
+            SQLFilterField(text: $tab.orderText, placeholder: tab.defaultOrder.isEmpty ? "Order by" : tab.defaultOrder, icon: nil,
+                           mode: .orderBy, tab: tab, state: state, onSubmit: apply)
+                .frame(minWidth: 100, idealWidth: 180, maxWidth: 180)
+            LimitMenu(limit: $tab.limit, options: [50, 100, 500, 1000], onChange: apply)
+            Spacer(minLength: 0).frame(width: 0)
+            if tab.canEdit {
+                IconButton(symbol: "plus", help: "Add an empty row at the top (saved with Save)") { tab.addInsertRow() }
+                IconButton(symbol: "trash", help: "Mark the selected rows for deletion") { tab.deleteSelected() }
+                    .disabled(!tab.hasSelection)
+                Divider().frame(height: 14)
             }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 150)
-            CompletingField(text: $tab.whereText, placeholder: "WHERE …", mode: .whereClause, tab: tab, state: state, onSubmit: apply)
-                .frame(maxWidth: .infinity)
-            CompletingField(text: $tab.orderText, placeholder: tab.defaultOrder.isEmpty ? "ORDER BY …" : tab.defaultOrder,
-                            mode: .orderBy, tab: tab, state: state, onSubmit: apply)
-                .frame(maxWidth: 240)
-            Picker("", selection: $tab.limit) {
-                ForEach([50, 100, 500, 1000], id: \.self) { Text("\($0)").tag($0) }
-            }
-            .labelsHidden().frame(width: 70)
-            .onChange(of: tab.limit) { apply() }
-            if tab.running {
-                Button { state.cancel(tab) } label: { Label("Stop", systemImage: "stop.fill") }
-                    .tint(.red).keyboardShortcut(".", modifiers: .command).help("Stop the running query (⌘.)")
-            } else {
-                Button { apply() } label: { Label("Run", systemImage: "play.fill") }
-                    .buttonStyle(.borderedProminent).help("Run (Return in a field, ⌘↩)")
-            }
-        }
-    }
-
-    private var row2: some View {
-        HStack(spacing: 8) {
-            Button { state.page(tab, by: -1) } label: { Image(systemName: "chevron.left") }
-                .disabled(tab.offset == 0 || tab.running)
-            Text(rangeLabel).font(.caption).monospacedDigit().foregroundStyle(.secondary)
-            Button { state.page(tab, by: 1) } label: { Image(systemName: "chevron.right") }
-                .disabled(!tab.hasMore || tab.running)
-            Button("Count") { Task { await state.count(tab) } }
-            Spacer()
-            Picker("", selection: $tab.transpose) {
-                Text("Grid").tag(false)
-                Text("Transpose").tag(true)
-            }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 150).help("Transpose: rows become columns")
+            IconButton(symbol: "rectangle.split.2x1", help: tab.transpose ? "Back to grid" : "Transpose: rows become columns",
+                       active: tab.transpose) { tab.transpose.toggle() }
             ColumnsButton(tab: tab)
             ExportMenu(state: state, tab: tab)
-            Button { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) } label: { Label("Open in SQL", systemImage: "terminal") }
-            Button { if let r = tab.visibleExport { copyToPasteboard(Export.json(columns: r.columns, rows: r.rows)) } } label: { Label("Copy JSON", systemImage: "curlybraces") }
-                .disabled(tab.result == nil)
-            Button { if let r = tab.visibleExport { copyToPasteboard(Export.tsv(columns: r.columns, rows: r.rows)) } } label: { Label("Copy TSV", systemImage: "doc.on.doc") }
-                .disabled(tab.result == nil)
+            MoreMenu(state: state, tab: tab)
         }
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .frame(height: 34)
     }
 
-    private var rangeLabel: String {
-        let n = tab.result?.rows.count ?? 0
-        return n == 0 ? "0" : "\(tab.offset + 1)–\(tab.offset + n)"
+    private func apply() { state.runTab(tab) }
+}
+
+/// Data / Structure switch as two icon segments with tooltips.
+struct ModeSegment: View {
+    @Binding var structure: Bool
+
+    var body: some View {
+        HStack(spacing: 1) {
+            seg("tablecells", "Data", on: !structure) { structure = false }
+            seg("list.bullet.rectangle", "Structure", on: structure) { structure = true }
+        }
+        .padding(1)
+        .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 6))
     }
 
-    private func apply() {
-        state.guardPending(tab) {
-            tab.offset = 0
-            Task { await state.loadTable(tab) }
+    private func seg(_ symbol: String, _ help: String, on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12))
+                .foregroundStyle(on ? Color.primary : Color.secondary)
+                .frame(width: 28, height: 20)
+                .background(on ? Color(nsColor: .controlBackgroundColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(on ? Color(nsColor: .separatorColor) : .clear, lineWidth: 0.5))
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain).help(help)
+    }
+}
+
+/// Borderless "100 ▾" row-limit menu.
+struct LimitMenu: View {
+    @Binding var limit: Int
+    let options: [Int]
+    var onChange: () -> Void
+
+    var body: some View {
+        Menu {
+            Picker("Limit", selection: $limit) {
+                ForEach(options, id: \.self) { Text("\($0) rows").tag($0) }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 3) {
+                Text("\(limit)").monospacedDigit()
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+            .frame(height: 22).contentShape(Rectangle())
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+        .fixedSize()
+        .onChange(of: limit) { onChange() }
+        .help("Rows per page")
+    }
+}
+
+/// Flat rounded field container around the completing text field (focus = accent outline).
+struct SQLFilterField: View {
+    @Binding var text: String
+    let placeholder: String
+    let icon: String?
+    let mode: CompletingField.Mode
+    let tab: WorkTab
+    let state: AppState
+    var onSubmit: () -> Void
+    @State private var focused = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let icon { Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary) }
+            CompletingField(text: $text, placeholder: placeholder, mode: mode, tab: tab, state: state, onSubmit: onSubmit,
+                            onFocus: { v in DispatchQueue.main.async { focused = v } })
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 22)
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .stroke(focused ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor), lineWidth: focused ? 1.5 : 1))
     }
 }

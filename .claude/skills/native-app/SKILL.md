@@ -52,3 +52,9 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   Grid rows map through resultRow/orig (client-side sort). Snapshot hooks: ROWBASE_SNAPSHOT_EDIT=1, _PREVIEW=1, _SAVE=1 (really saves —
   scratch DBs only; verify with psql/mysql afterwards).
 - Export: AppState+Edit.swift → Exporter (Core); table tabs export the whole filtered table, query tabs re-run the last statement.
+- Design system (2026-10-04 pass): window title = active tab, subtitle = connection · database; connection/db/RO-RW live ONLY in the
+  window toolbar (AppToolbar.swift, connection = Button+popover because toolbar Menus drop styled labels); one 34pt tab toolbar with
+  icon-only buttons + "…" overflow; pagination/metrics in the status bar; grid headers show types, numeric right-aligned, no striping
+  in empty area, NULL capsule; editor gutter with line numbers. Keep new UI consistent with this.
+- Snapshots render the window frame (titlebar/toolbar included) + content view; toolbar/sidebar look greyed because the snapshot
+  window is inactive — not a bug. `ROWBASE_SNAPSHOT_DARK=1` for dark mode (titlebar may render light: artifact, verify live).
