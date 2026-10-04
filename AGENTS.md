@@ -61,3 +61,6 @@ short: facts and rules only, no history.
 - 2026-10-04: SSH = system `ssh` subprocess (honours ~/.ssh/config); test via tests/fixtures/fake_ssh.py + ROWBASE_SSH (no sshd here).
 - 2026-10-04: MySQL `KILL QUERY` makes SLEEP() return normally → treat success-after-cancel as cancelled.
 - 2026-10-04: Safety hook blocks `rm` on `$VAR/...` globs — use literal paths or `"${VAR:?}"`.
+- 2026-10-04: Swift: "\r\n" is ONE Character — test unicodeScalars when matching CR/LF (CSV export bug caught by shared vectors).
+- 2026-10-04: Cross-track behaviour is pinned by shared JSON vectors (guard, export) — prefer that pattern for any new shared format.
+- 2026-10-04: Delegated UI can't be clicked in snapshots → add a snapshot hook that drives the real code path (e.g. ROWBASE_SNAPSHOT_SAVE) and verify the DB.

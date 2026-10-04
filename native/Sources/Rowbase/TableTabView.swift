@@ -11,6 +11,7 @@ struct TableTabView: View {
             VStack(spacing: 6) {
                 row1
                 row2
+                if tab.canEdit { EditToolbar(state: state, tab: tab) }
                 Text(tab.buildSQL())
                     .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.tail).textSelection(.enabled)
@@ -24,6 +25,10 @@ struct TableTabView: View {
             } else {
                 ResultArea(state: state, tab: tab)
             }
+        }
+        .sheet(item: $tab.editSheet) { ref in CellEditSheet(tab: tab, ref: ref) }
+        .sheet(isPresented: Binding(get: { tab.previewStatements != nil }, set: { if !$0 { tab.previewStatements = nil } })) {
+            SQLPreviewSheet(statements: tab.previewStatements ?? [])
         }
     }
 
@@ -85,6 +90,7 @@ struct TableTabView: View {
             }
             .pickerStyle(.segmented).labelsHidden().frame(width: 150).help("Transpose: rows become columns")
             ColumnsButton(tab: tab)
+            ExportMenu(state: state, tab: tab)
             Button { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) } label: { Label("Open in SQL", systemImage: "terminal") }
             Button { if let r = tab.visibleExport { copyToPasteboard(Export.json(columns: r.columns, rows: r.rows)) } } label: { Label("Copy JSON", systemImage: "curlybraces") }
                 .disabled(tab.result == nil)
@@ -99,7 +105,9 @@ struct TableTabView: View {
     }
 
     private func apply() {
-        tab.offset = 0
-        Task { await state.loadTable(tab) }
+        state.guardPending(tab) {
+            tab.offset = 0
+            Task { await state.loadTable(tab) }
+        }
     }
 }

@@ -38,7 +38,7 @@ private struct TabItem: View {
             if tab.connection.id != state.selectedConnectionID {
                 Text(tab.connection.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            Button { state.closeTab(tab.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+            Button { state.requestClose(tab.id) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
                 .buttonStyle(.borderless)
                 .opacity(hover || active ? 1 : 0)
         }
@@ -48,7 +48,7 @@ private struct TabItem: View {
         .contentShape(Rectangle())
         .onTapGesture { state.activate(tab.id) }
         .onHover { hover = $0 }
-        .overlay(MiddleClick { state.closeTab(tab.id) })
+        .overlay(MiddleClick { state.requestClose(tab.id) })
     }
 }
 

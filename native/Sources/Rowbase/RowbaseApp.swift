@@ -31,7 +31,7 @@ struct RowbaseApp: App {
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Close Tab") {
-                    if let id = state.activeTabID { state.closeTab(id) } else { NSApp.keyWindow?.performClose(nil) }
+                    if let id = state.activeTabID { state.requestClose(id) } else { NSApp.keyWindow?.performClose(nil) }
                 }.keyboardShortcut("w")
             }
             CommandGroup(replacing: .sidebar) {
@@ -42,7 +42,12 @@ struct RowbaseApp: App {
             }
             CommandMenu("Database") {
                 Button("Run") { state.runActive() }.keyboardShortcut(.return, modifiers: .command)
-                Button("Refresh") { state.refresh(); if let t = state.activeTab, !t.isQuery { t.info = nil; Task { await state.reload(t) } } }.keyboardShortcut("r")
+                Button("Refresh") {
+                    state.refresh()
+                    if let t = state.activeTab, !t.isQuery {
+                        state.guardPending(t) { t.info = nil; Task { await state.reload(t) } }
+                    }
+                }.keyboardShortcut("r")
                 Divider()
                 Button("Find Table") { state.filterFocusTick += 1 }.keyboardShortcut("p")
                 Button("Connections…") { state.showConnections = true }.keyboardShortcut("k", modifiers: [.command, .shift])

@@ -38,6 +38,22 @@ final class WorkTab: Identifiable {
     var runStart: Date?
     var transpose = false
     var columnPickerOpen = false
+    // Pending edits (table tabs). Row indexes refer to the loaded page (result.rows); `inserts[0]` is the top row of the grid.
+    var edits: [Int: [String: NewValue]] = [:] { didSet { pendingVersion += 1 } }
+    var deleted: Set<Int> = [] { didSet { pendingVersion += 1 } }
+    var inserts: [[String: NewValue]] = [] { didSet { pendingVersion += 1 } }
+    var pendingVersion = 0
+    var selectedRows: Set<Int> = []
+    var selectedInserts: Set<Int> = []
+    var editSheet: CellRef?
+    var previewStatements: [String]?
+    var saving = false
+    var exporting = false
+    var hint: String?
+    /// Query tabs: last successfully executed statement and whether re-running it for export is safe (read-only verb).
+    var lastSQL = ""
+    var exportable = false
+    @ObservationIgnored var hintToken = 0
     /// Columns hidden in grid / transpose / copy. Table tabs persist this per connection+database+table.
     var hidden: Set<String> = [] { didSet { if oldValue != hidden { saveHidden() } } }
     /// Restored from the previous session: load the data when the tab is first activated.

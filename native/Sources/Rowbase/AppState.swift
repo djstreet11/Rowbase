@@ -64,6 +64,10 @@ final class AppState {
     }
     var filterFocusTick = 0
     var pendingRun: PendingRun?
+    var alert: AppAlert?
+    var pendingSave: WorkTab?
+    var pendingDiscard: PendingDiscard?
+    var exportPrompt: ExportPrompt?
     @ObservationIgnored private var infoCache: [String: TableInfo] = [:]
     @ObservationIgnored private var bootstrapped = false
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -366,7 +370,7 @@ final class AppState {
         Task { await execute(p.tab, sql: p.sql, isExplain: p.isExplain) }
     }
 
-    private func record(_ tab: WorkTab, sql: String, source: String, result: QueryResult?, error: String?) {
+    func record(_ tab: WorkTab, sql: String, source: String, result: QueryResult?, error: String?) {
         history.add(History.Entry(conn: tab.connection.id, connName: tab.connection.name, sql: sql, source: source,
                                   rows: result?.rows.count, elapsed: result?.elapsed, error: error, affected: result?.affected))
     }
@@ -385,6 +389,9 @@ final class AppState {
             tab.isExplain = isExplain
             tab.result = r
             tab.hasMore = r.truncated
+            tab.lastSQL = sql
+            tab.exportable = !isExplain && !r.columns.isEmpty && r.affected == nil
+                && !Self.mayWrite(sql, first: SQLGuard.analyze(sql, conn.dialect).first, dialect: conn.dialect)
             record(tab, sql: sql, source: "console", result: r, error: nil)
             if r.affected != nil { clearInfo(for: conn); if conn.id == selectedConnectionID { await loadTables() } }
         } catch {
@@ -421,6 +428,7 @@ final class AppState {
             if r.rows.count > tab.limit { r.rows.removeLast(r.rows.count - tab.limit); r.truncated = true } else { r.truncated = false }
             tab.isExplain = false
             tab.hasMore = r.truncated
+            tab.clearPending()  // row indexes of the old page are gone
             tab.result = r
             record(tab, sql: tab.buildSQL(), source: "table", result: r, error: nil)
         } catch {
@@ -445,8 +453,10 @@ final class AppState {
     }
 
     func page(_ tab: WorkTab, by dir: Int) {
-        tab.offset = max(0, tab.offset + dir * tab.limit)
-        Task { await loadTable(tab) }
+        guardPending(tab) { [self] in
+            tab.offset = max(0, tab.offset + dir * tab.limit)
+            Task { await loadTable(tab) }
+        }
     }
 
     // MARK: snapshot hook
@@ -502,6 +512,26 @@ final class AppState {
                 c.tv = ed
                 c.update(force: true)
                 try? await Task.sleep(for: .milliseconds(800))
+            }
+        }
+        if env["ROWBASE_SNAPSHOT_EDIT"] == "1" || env["ROWBASE_SNAPSHOT_PREVIEW"] == "1" || env["ROWBASE_SNAPSHOT_SAVE"] == "1", let t = activeTab, t.tableName != nil {
+            var waited = 0
+            while (t.result == nil || t.info == nil) && waited < 40 { try? await Task.sleep(for: .milliseconds(250)); waited += 1 }
+            if t.canEdit, let r = t.result {
+                let col = r.columns.contains("note") ? "note" : (r.columns.first { t.isEditable($0) && !(t.info?.primaryKey.contains($0) ?? true) } ?? "")
+                t.setCell(CellRef(insert: false, row: 0, column: col), to: "edited")
+                t.deleteRows(result: [1], inserts: [])
+                t.addInsertRow()
+                t.setCell(CellRef(insert: true, row: 0, column: col), to: "new")
+            }
+            try? await Task.sleep(for: .milliseconds(700))
+            if env["ROWBASE_SNAPSHOT_SAVE"] == "1" {  // exercises the real save path (scratch databases only)
+                await save(t)
+                try? await Task.sleep(for: .milliseconds(1200))
+            }
+            if env["ROWBASE_SNAPSHOT_PREVIEW"] == "1" {
+                await previewSQL(t)
+                try? await Task.sleep(for: .milliseconds(900))
             }
         }
         func render(_ w: NSWindow, to p: String) {

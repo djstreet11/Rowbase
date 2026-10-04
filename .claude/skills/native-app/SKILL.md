@@ -48,3 +48,7 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - Database override: `AppState.databaseOverride[connId]` (UserDefaults) applied in `selectedConnection`; table-info cache key
   includes the database; tabs keep the database they were opened on.
 - Clear `state.status` on connection/database switch — otherwise errors from the previous connection linger.
+- Editing: WorkTab pending model (EditModel.swift: edits by ORIGINAL result row index, deleted, inserts) → buildChanges → Engine.apply.
+  Grid rows map through resultRow/orig (client-side sort). Snapshot hooks: ROWBASE_SNAPSHOT_EDIT=1, _PREVIEW=1, _SAVE=1 (really saves —
+  scratch DBs only; verify with psql/mysql afterwards).
+- Export: AppState+Edit.swift → Exporter (Core); table tabs export the whole filtered table, query tabs re-run the last statement.

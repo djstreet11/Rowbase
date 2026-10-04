@@ -30,6 +30,7 @@ struct QueryTabView: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().frame(width: 150).help("Transpose: rows become columns")
                 ColumnsButton(tab: tab)
+                ExportMenu(state: state, tab: tab)
                 Spacer()
                 ConnDot(color: tab.connection.color, size: 7)
                 Text(tab.connection.name).font(.caption).foregroundStyle(.secondary)

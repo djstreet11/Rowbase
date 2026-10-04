@@ -7,8 +7,8 @@ struct RowInspector: View {
     @State private var filter = ""
 
     private var row: [String?]? {
-        guard let tab, let r = tab.result, let i = tab.inspectRow, i < r.rows.count else { return nil }
-        return r.rows[i]
+        guard let tab, let i = tab.inspectRow else { return nil }
+        return tab.effectiveRow(i)  // includes pending edits
     }
 
     private var title: String {
@@ -37,7 +37,7 @@ struct RowInspector: View {
                     Section {
                         ForEach(Array(r.columns.enumerated()), id: \.offset) { i, name in
                             if filter.isEmpty || name.localizedCaseInsensitiveContains(filter) {
-                                field(tab: tab, name: name, value: i < row.count ? row[i] : nil)
+                                field(tab: tab, name: name, value: i < row.count ? row[i] : nil, row: tab.inspectRow ?? 0)
                             }
                         }
                     }
@@ -71,14 +71,34 @@ struct RowInspector: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    private func field(tab: WorkTab, name: String, value: String?) -> some View {
+    private func field(tab: WorkTab, name: String, value: String?, row: Int) -> some View {
         let ci = tab.info?.columns.first { $0.name == name }
+        let editable = tab.isEditable(name) && !tab.deleted.contains(row)
+        let edited = tab.isEdited(row: row, column: name)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(name).fontWeight(.semibold)
                 if let t = ci?.type { Text(t).font(.caption).foregroundStyle(.secondary) }
+                if editable {
+                    Spacer(minLength: 4)
+                    if ci?.fk != nil, let value {
+                        Button { state.followFK(from: tab, column: name, value: value) } label: { Image(systemName: "arrow.up.right.square") }
+                            .buttonStyle(.borderless).help("Open referenced row")
+                    }
+                    if ci?.nullable != false {
+                        Button("NULL") { tab.setCell(CellRef(insert: false, row: row, column: name), to: nil) }
+                            .buttonStyle(.borderless).font(.caption2).foregroundStyle(.secondary).help("Set to NULL")
+                    }
+                    if edited {
+                        Button { tab.revert(CellRef(insert: false, row: row, column: name)) } label: { Image(systemName: "arrow.uturn.backward") }
+                            .buttonStyle(.borderless).help("Revert change")
+                    }
+                }
             }
-            if let value {
+            if editable {
+                InspectorEditField(tab: tab, row: row, name: name, value: value)
+                    .id("\(row)|\(name)|\(edited)")
+            } else if let value {
                 if ci?.fk != nil, !tab.isQuery {
                     Button { state.followFK(from: tab, column: name, value: value) } label: {
                         Text(value).font(.system(size: 12, design: .monospaced)).multilineTextAlignment(.leading)
@@ -91,11 +111,38 @@ struct RowInspector: View {
             }
         }
         .padding(.vertical, 2)
+        .background(edited ? Color.yellow.opacity(0.22) : Color.clear)
     }
 
     private func openRef(_ tab: WorkTab, _ ref: Reference, value: String) {
         let d = tab.connection.dialect
         let lit = value.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil ? value : d.literal(value)
         state.openTable(ref.table, where: "\(d.column(ref.column)) = \(lit)", chain: state.chain(from: tab, via: ref.refColumn), connection: tab.connection)
+    }
+}
+
+/// Editable value of one inspector field; commits on Return / focus loss into the tab's pending model.
+private struct InspectorEditField: View {
+    let tab: WorkTab
+    let row: Int
+    let name: String
+    let value: String?
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(value == nil ? "NULL" : "", text: $draft, axis: .vertical)
+            .font(.system(size: 12, design: .monospaced))
+            .lineLimit(1...8)
+            .textFieldStyle(.roundedBorder)
+            .focused($focused)
+            .onSubmit(commit)
+            .onChange(of: focused) { if !focused { commit() } }
+            .onAppear { draft = value ?? "" }
+    }
+
+    private func commit() {
+        if (value == nil && draft.isEmpty) || draft == value { return }
+        tab.setCell(CellRef(insert: false, row: row, column: name), to: draft)
     }
 }

@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-04 (native: flat layout, autocomplete, cancel, SSH).
+> Last update: 2026-10-04 (row editing + export in both tracks, native parity).
 
 ## 1. Origin & idea
 
@@ -121,9 +121,9 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
   Database switcher in the sidebar (lists server databases; required for MySQL connections without a database;
   choice remembered per connection as UI state, not written to connections.json).
 - **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
-- **Gaps vs web UI**: transpose view, column picker (hide columns), WHERE/ORDER BY autocomplete in table tabs, EXPLAIN ANALYZE
-  button, tabs restored on relaunch, tables/views filter, history "errors only", MySQL EXPLAIN highlighting.
-- **Gaps (both)**: no inline editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
+- **Parity with web UI**: reached 2026-10-04 (transpose, column picker, WHERE/ORDER BY autocomplete, EXPLAIN ANALYZE, tab restore,
+  tables/views filter, history errors filter, MySQL EXPLAIN highlight). Editing + export in both tracks.
+- **Gaps (both)**: no structure (DDL) editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
   (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
 - **Distribution (later)**: Developer ID + notarization, Sparkle. App Store not planned (sandbox vs shared store/SSH).
 
@@ -146,6 +146,13 @@ Deferred; keep contracts (§5) portable.
 - SSH: tunnels through the system `ssh` (`-N -L 127.0.0.1:<free>:<target>`, BatchMode, key/agent); URL form `?ssh=user@host:port`.
 - History JSONL: `{"ts","conn"(id),"connName","sql","source","rows"|"error","elapsed","affected"?}`.
 - Guard: same allow-lists/forbidden patterns; `tests/test_guard.py` vectors are the conformance suite.
+- Row editing (`rowbase/edit.py`, `Edit.swift`): changes `[{op: update, key: {pk: v}, set: {col: v|null}} | {op: insert, values} | {op: delete, key}]`;
+  write-enabled connection + primary key required, binary/unknown columns refused, values sent as quoted literals,
+  one transaction, every UPDATE/DELETE must hit exactly 1 row (MySQL unchanged-value case verified by COUNT) else rollback.
+  Web: `POST /api/edit {conn, table, changes, dryRun}`.
+- Export: csv (RFC 4180, CRLF), tsv, json, md, sql (INSERT per row) — byte-identical across tracks via `tests/export_vectors.json`.
+  Web: `POST /api/export` re-runs the statement with up to 1M rows.
+- Database switch: web connection key `<id>::<db>`; native per-connection override in UI state. Not stored in connections.json.
 
 ## 6. Roadmap
 

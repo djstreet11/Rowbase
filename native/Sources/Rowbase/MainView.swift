@@ -30,6 +30,7 @@ struct MainView: View {
         } message: { p in
             Text(String(p.sql.prefix(300)))
         }
+        .modifier(EditAlerts(state: state))
         .task { await state.bootstrap() }
         .onAppear { installEscMonitor() }
     }
@@ -125,7 +126,13 @@ struct StatusBar: View {
 
     @ViewBuilder private var left: some View {
         if let t = state.activeTab {
-            if t.running {
+            if t.exporting {
+                ProgressView().controlSize(.mini)
+                Text("Exporting… ").foregroundStyle(.secondary)
+            } else if t.saving {
+                ProgressView().controlSize(.mini)
+                Text("Saving… ").foregroundStyle(.secondary)
+            } else if t.running {
                 ProgressView().controlSize(.mini)
                 TimelineView(.periodic(from: .now, by: 0.25)) { ctx in
                     let secs = max(0, ctx.date.timeIntervalSince(t.runStart ?? ctx.date))
@@ -147,8 +154,49 @@ struct StatusBar: View {
             } else {
                 Text(t.note ?? "Ready").foregroundStyle(.secondary)
             }
+            if let h = t.hint { Text(h).foregroundStyle(.orange).lineLimit(1) }
         } else {
             Text(state.status.isEmpty ? "Ready" : state.status).foregroundStyle(state.status.isEmpty ? .secondary : Color.red).lineLimit(1)
         }
+    }
+}
+
+/// Confirmation / error alerts and the export table-name sheet of the edit & export features.
+struct EditAlerts: ViewModifier {
+    @Bindable var state: AppState
+
+    func body(content: Content) -> some View {
+        content
+            .alert(saveTitle, isPresented: Binding(get: { state.pendingSave != nil }, set: { if !$0 { state.pendingSave = nil } }),
+                   presenting: state.pendingSave) { t in
+                Button("Save", role: .destructive) { state.pendingSave = nil; Task { await state.save(t) } }
+                Button("Cancel", role: .cancel) { state.pendingSave = nil }
+            } message: { t in
+                Text("All changes to \(t.tableName ?? "this table") run in one transaction on a production connection.")
+            }
+            .alert(discardTitle, isPresented: Binding(get: { state.pendingDiscard != nil }, set: { if !$0 { state.pendingDiscard = nil } }),
+                   presenting: state.pendingDiscard) { p in
+                Button("Discard", role: .destructive) { state.pendingDiscard = nil; p.tab.clearPending(); p.action() }
+                Button("Cancel", role: .cancel) { state.pendingDiscard = nil }
+            } message: { p in
+                Text("Pending edits to \(p.tab.tableName ?? "this table") have not been saved.")
+            }
+            .alert(state.alert?.title ?? "", isPresented: Binding(get: { state.alert != nil }, set: { if !$0 { state.alert = nil } }),
+                   presenting: state.alert) { _ in
+                Button("OK", role: .cancel) { state.alert = nil }
+            } message: { a in
+                Text(String(a.message.prefix(1200)))
+            }
+            .sheet(item: $state.exportPrompt) { p in ExportTableSheet(state: state, prompt: p) }
+    }
+
+    private var saveTitle: String {
+        guard let t = state.pendingSave else { return "" }
+        return "Save \(plural(t.pendingCount, "change")) to PRODUCTION (\(t.connection.name))?"
+    }
+
+    private var discardTitle: String {
+        guard let p = state.pendingDiscard else { return "" }
+        return "Discard \(plural(p.tab.pendingCount, "unsaved change"))?"
     }
 }
