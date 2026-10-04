@@ -1,5 +1,8 @@
 # Rowbase
 
+[![CI](https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml/badge.svg)](https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 **A fast, good-looking, read-only-by-default database client — for humans and for AI agents.**
 
 MySQL / MariaDB · PostgreSQL · SQLite — a native macOS app, a one-file web UI + CLI for macOS, Linux and Windows,
@@ -16,6 +19,8 @@ and an MCP server so assistants (Claude, Cursor, Codex, …) can explore and que
 - **AI-ready** — built-in MCP server with a token-efficient result format (TOON) and a knowledge-base guide.
 
 ## Get it
+Downloads: [GitHub Releases](https://github.com/djstreet11/Rowbase/releases).
+
 | Platform | Download | Run |
 |---|---|---|
 | macOS (native app) | `Rowbase-x.y.z.dmg` | drag to Applications |

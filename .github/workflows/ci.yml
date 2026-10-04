@@ -15,8 +15,8 @@ jobs:
         ports: ["3306:3306"]
         options: --health-cmd "healthcheck.sh --connect" --health-interval 5s --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: {python-version: "3.12"}
       - run: pip install -e .
       - run: python -m unittest discover -s tests -t . -v
@@ -26,5 +26,16 @@ jobs:
   swift:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - run: cd native && swift test   # PostgreSQL/MySQL cases skip without local servers
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1   # the package needs Swift 6.2 (Xcode 26)
+        with: {xcode-version: latest-stable}
+      - name: swift test   # PostgreSQL/MySQL cases skip without local servers
+        run: |
+          swift --version
+          cd native
+          set +e
+          swift test 2>&1 | tee test.log
+          code=${PIPESTATUS[0]}
+          # surface failures as annotations (public, unlike job logs)
+          if [ "$code" != 0 ]; then grep -E "error:|✘|failed" test.log | head -30 | while IFS= read -r l; do echo "::error::${l:0:400}"; done; fi
+          exit $code

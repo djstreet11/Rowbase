@@ -15,11 +15,11 @@ jobs:
           - {os: macos-14}              # Apple Silicon
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Linux (Docker, glibc 2.31 → Ubuntu 20.04+)
         if: matrix.linux
         run: bash packaging/build-linux.sh ${{ matrix.linux }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: ${{ !matrix.linux }}
         with: {python-version: "3.12"}
       - name: Windows / macOS
@@ -34,8 +34,13 @@ jobs:
   dmg:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: {fetch-depth: 0}
+      - uses: maxim-lobanov/setup-xcode@v1
+        with: {xcode-version: latest-stable}
+      - uses: actions/setup-python@v6   # the DMG embeds the one-file CLI (MCP server)
+        with: {python-version: "3.12"}
+      - run: pip install . nuitka ordered-set zstandard && python packaging/build.py
       - run: bash native/scripts/release.sh
         env:   # optional: set these secrets/vars to ship a signed + notarized DMG (see docs/RELEASING.md)
           ROWBASE_SIGN_IDENTITY: ${{ vars.ROWBASE_SIGN_IDENTITY }}
