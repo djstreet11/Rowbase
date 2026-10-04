@@ -19,3 +19,5 @@ description: Work on or use Rowbase's MCP server (rowbase/mcp.py) — add/change
 - Verifying with a real client: `claude mcp list` shows health; a full assistant run needs a NEW Claude Code session (servers load at
   start). In-session, simulate the client: read command/args from ~/.claude.json → spawn → initialize → tools/call (see git log 2026-10-04).
 - Rebuild dist/rowbase-macos-arm64 after Python changes — Claude Code runs that binary, not the venv.
+- Dockerfile (repo root) runs `rowbase mcp` as non-root with ROWBASE_SECRETS=file — used by Glama's automated checks; keep it working
+  (test: build, pipe initialize + tools/list into `docker run -i --rm <img>`).

@@ -1,0 +1,12 @@
+.git
+.venv
+native
+dist
+build
+*.build
+tests
+docs
+packaging
+.scratch-home*
+.idea
+__pycache__
