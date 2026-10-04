@@ -123,7 +123,9 @@ public actor Engine {
                              uniquingKeysWith: { a, _ in a })
         let truthy: (String?) -> Bool = { ["1", "t", "true"].contains(($0 ?? "").lowercased()) }
         let cols = try await meta(c, Catalog.columns(d, table)).map {
-            ColumnInfo(name: $0[0] ?? "", type: $0[1] ?? "", nullable: truthy($0[2]), key: $0[3] ?? "", defaultValue: $0[4], fk: fks[$0[0] ?? ""])
+            // MariaDB reports a NULL default as the string "NULL" (string defaults are quoted)
+            ColumnInfo(name: $0[0] ?? "", type: $0[1] ?? "", nullable: truthy($0[2]), key: $0[3] ?? "",
+                       defaultValue: d == .mysql && $0[4] == "NULL" ? nil : $0[4], fk: fks[$0[0] ?? ""])
         }
         guard !cols.isEmpty else { throw RowbaseError("Table '\(table)' not found.") }
         let idx = try await meta(c, Catalog.indexes(d, table)).map { IndexInfo(name: $0[0] ?? "", unique: truthy($0[1]), columns: $0[2] ?? "") }

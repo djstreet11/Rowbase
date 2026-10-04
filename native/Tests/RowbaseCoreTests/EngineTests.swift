@@ -112,6 +112,7 @@ enum Fixture {
         let info = try await e.tableInfo(ro, orders)
         let cols = Dictionary(uniqueKeysWithValues: info.columns.map { ($0.name, $0) })
         #expect(cols["id"]?.key == "PRI" && info.primaryKey == ["id"])
+        #expect(cols["note"]?.defaultValue == nil, "\(d): NULL default must be nil")
         let users = d == .postgres ? "rowbase_swift.users" : "users"
         #expect(cols["user_id"]?.fk == ForeignKey(table: users, column: "id"))
         #expect(info.indexes.contains { $0.columns == "user_id" })

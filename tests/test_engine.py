@@ -125,6 +125,7 @@ class Base:
         cols = {c["name"]: c for c in info["columns"]}
         self.assertEqual(cols["id"]["key"], "PRI")
         self.assertEqual(cols["user_id"]["fk"], {"table": "users", "column": "id"})
+        self.assertIsNone(cols["note"]["default"])  # MariaDB reports the string 'NULL'; must be a real null
         self.assertTrue(any(i["cols"] == "user_id" for i in info["indexes"]))
         refby = engine.table_info(self.ro, "users")["referencedBy"]
         self.assertEqual(refby, [{"table": self.orders, "column": "user_id", "refColumn": "id"}])

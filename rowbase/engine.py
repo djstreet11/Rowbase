@@ -232,7 +232,9 @@ def tables(conn, pooled=True):
 def table_info(conn, table, pooled=True):
     drv = dialect(conn)
     fks = {r[0]: {"table": r[1], "column": r[2]} for r in _meta(conn, drv.fks_sql(table), pooled)}
-    cols = [{"name": r[0], "type": r[1], "nullable": bool(r[2]), "key": r[3] or "", "default": fmt_value(r[4]),
+    # MariaDB reports a NULL default as the string 'NULL' (string defaults are quoted: "'NULL'")
+    nul_default = lambda v: None if drv.name == "mysql" and v == "NULL" else fmt_value(v)
+    cols = [{"name": r[0], "type": r[1], "nullable": bool(r[2]), "key": r[3] or "", "default": nul_default(r[4]),
              "comment": r[5] or "", "fk": fks.get(r[0])} for r in _meta(conn, drv.columns_sql(table), pooled)]
     if not cols:
         raise QueryError(f"Table '{table}' not found.")
