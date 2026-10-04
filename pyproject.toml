@@ -7,6 +7,8 @@ name = "rowbase"
 version = "0.1.0"
 description = "Fast, safe, good-looking database client: CLI for agents + local web UI"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+readme = "README.md"
 dependencies = ["pymysql>=1.1", "pg8000>=1.31", "keyring>=24"]  # all pure Python → one-file builds on any OS
 
 [project.scripts]
