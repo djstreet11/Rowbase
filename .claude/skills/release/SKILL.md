@@ -33,8 +33,11 @@ See docs/RELEASING.md for the full guide. Key facts:
 - Watch by run id: `curl -s https://api.github.com/repos/djstreet11/Rowbase/actions/runs/<id>` (match the run id, not a text pattern
   across several runs — a pattern once matched another run's "completed").
 
-## PyPI + MCP Registry (release.yml jobs `pypi`, `mcp-registry`)
+## PyPI + MCP Registry (release.yml job `pypi`; workflow mcp-registry.yml)
 - PyPI project `rowbase-db` via Trusted Publishing (OIDC, no tokens): publisher = djstreet11/Rowbase, workflow release.yml, environment pypi.
 - MCP Registry name `io.github.djstreet11/rowbase`; ownership = GitHub OIDC + `<!-- mcp-name: io.github.djstreet11/rowbase -->` in README
   (it becomes the PyPI description). server.json schema 2025-12-11; `mcp-publisher validate` runs before publish.
 - A version can never be re-uploaded to PyPI → bump the patch version for every published fix.
+- mcp-registry.yml runs after a successful Release (workflow_run), on server.json changes on main, or manually; skips if the
+  version isn't on PyPI yet or is already registered. Registry limits: description ≤ 100 chars (v0.2.1 failed on that) —
+  check locally first: download mcp-publisher (official registry releases) → `mcp-publisher validate`.

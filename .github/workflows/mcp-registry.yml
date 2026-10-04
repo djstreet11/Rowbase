@@ -1,0 +1,39 @@
+name: MCP Registry
+# Publishes server.json to the official MCP Registry (io.github.djstreet11/rowbase).
+# Runs after a successful Release (PyPI has the version by then), when server.json changes on main, or manually.
+# Ownership: GitHub OIDC (namespace io.github.djstreet11) + the mcp-name marker in the PyPI README.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: [server.json]
+  workflow_dispatch:
+jobs:
+  publish:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    permissions: {id-token: write, contents: read}
+    steps:
+      - uses: actions/checkout@v5
+        with: {ref: "${{ github.event.workflow_run.head_sha || github.sha }}"}
+      - name: Skip unless this version is on PyPI
+        id: check
+        run: |
+          v=$(python3 -c "import json;print(json.load(open('server.json'))['version'])")
+          if curl -fsS -o /dev/null "https://pypi.org/pypi/rowbase-db/$v/json"; then echo "ok=1" >> "$GITHUB_OUTPUT"
+          else echo "::notice::rowbase-db $v is not on PyPI yet — skipping (the Release run will publish it)"; fi
+      - name: Install mcp-publisher
+        if: steps.check.outputs.ok
+        run: curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+      - name: Validate & publish
+        if: steps.check.outputs.ok
+        run: |
+          ./mcp-publisher validate
+          ./mcp-publisher login github-oidc
+          out=$(./mcp-publisher publish 2>&1) && { echo "$out"; exit 0; }
+          echo "$out"
+          # same version already in the registry → nothing to do (e.g. manual re-run)
+          echo "$out" | grep -qiE "already exists|duplicate|cannot publish duplicate" && echo "::notice::already published" && exit 0
+          echo "::error::${out:0:400}"; exit 1
