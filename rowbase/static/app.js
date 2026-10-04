@@ -311,6 +311,7 @@ function openConsole(sql = '', opts = {}) {
 function closeTab(id) {
   const i = App.tabs.findIndex(t => t.id === id);
   if (i < 0) return;
+  if (pendCount(App.tabs[i]) && !confirm(`Discard ${plural(pendCount(App.tabs[i]), 'unsaved change')}?`)) return;
   App.tabs[i].el?.remove();
   App.tabs.splice(i, 1);
   if (App.active === id) App.active = (App.tabs[i] || App.tabs[i - 1])?.id || null;
@@ -380,6 +381,14 @@ function buildPane(t) {
   });
   $('.cols', tpl).onclick = e => colPicker(t, e.currentTarget);
   $('.json', tpl).onclick = () => exportRes(t, 'json');
+  $('.export', tpl).onclick = e => exportMenu(t, e.currentTarget);
+  $('.result', tpl).addEventListener('dblclick', e => editCell(t, e));
+  if (t.type === 'table') {
+    $('.addrow', tpl).onclick = () => { if (canEdit(t, true)) { pend(t).ins.unshift({}); renderResult(t); } };
+    $('.discard', tpl).onclick = () => { t.pend = null; renderResult(t); };
+    $('.preview', tpl).onclick = e => previewEdits(t, e.currentTarget);
+    $('.save', tpl).onclick = () => saveEdits(t);
+  }
   $('.tsv', tpl).onclick = () => exportRes(t, 'tsv');
   $('.limit', tpl).value = String(t.limit);
   $('.result', tpl).addEventListener('click', e => gridClick(t, e));
@@ -451,6 +460,8 @@ async function loadTable(t) {
 }
 
 async function runTable(t) {
+  if (pendCount(t) && !confirm(`Discard ${plural(pendCount(t), 'unsaved change')}?`)) return;
+  t.pend = null;
   const sql = tableSql(t);
   $('.sqlline', t.el).textContent = sql.replace(/\n/g, ' ');
   const r = await execute(t, sql, t.limit, 'table');
@@ -475,7 +486,7 @@ async function execute(t, sql, limit, source) {
   box.style.opacity = '.5';
   try {
     const r = await api('/api/query', {conn: t.conn, sql, limit, source});
-    t.res = r; t.lastLimit = limit; t.sort = null;
+    t.res = r; t.lastLimit = limit; t.sort = null; t.lastSql = sql;
     t.res.explain = /^\s*EXPLAIN\b/i.test(sql);
     if (r.affected != null) {
       Schema.clear(t.conn);
@@ -606,11 +617,17 @@ function renderResult(t) {
     el.innerHTML = `<table class="grid tp"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + (r.rows.length ? '' : '<div class="empty">Empty</div>');
     return;
   }
-  const s = t.sort;
+  const s = t.sort, p = t.pend, edits = p?.set || {}, del = new Set(p?.del || []);
+  updatePendBar(t);
+  const insRows = (p?.ins || []).map((v, k) => `<tr class="inserted"><td class="rn" title="New row">+</td>${idx.map(i =>
+    `<td class="${r.cols[i] in v ? 'edited' : ''}" data-c="${i}" data-r="i${k}">${r.cols[i] in v ? cellHtml(v[r.cols[i]], i, -1) : '<span class="null">DEFAULT</span>'}</td>`).join('')}</tr>`).join('');
+  const shown = (row, ri, i) => (edits[ri] && r.cols[i] in edits[ri] ? edits[ri][r.cols[i]] : row[i]);
   const head = '<th class="rn">#</th>' + idx.map(i => `<th data-sort="${i}" title="${esc(typeOf(r.cols[i]))}">${esc(r.cols[i])}${s && s.i === i ? (s.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('');
-  const body = r.rows.map((row, ri) => `<tr class="${badRow(row) ? 'bad' : ''}"><td class="rn" data-row="${ri}" title="All fields of the row">${off + ri + 1}</td>${idx.map(i =>
-    `<td class="${badCell(row, i) ? 'bad' : ''}" title="${row[i] === null ? '' : esc(String(row[i]).slice(0, 500))}">${cellHtml(row[i], i, ri, fkOf(r.cols[i]))}</td>`).join('')}</tr>`).join('');
-  el.innerHTML = `<table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + (r.rows.length ? '' : '<div class="empty">Empty</div>');
+  const body = insRows + r.rows.map((row, ri) => `<tr class="${badRow(row) ? 'bad' : ''}${del.has(ri) ? ' deleted' : ''}"><td class="rn" data-row="${ri}" title="All fields of the row">${off + ri + 1}</td>${idx.map(i => {
+    const v = shown(row, ri, i), ed = edits[ri] && r.cols[i] in edits[ri];
+    return `<td class="${badCell(row, i) ? 'bad' : ''}${ed ? ' edited' : ''}" data-c="${i}" data-r="${ri}" title="${v === null ? '' : esc(String(v).slice(0, 500))}">${cellHtml(v, i, ri, ed ? null : fkOf(r.cols[i]))}</td>`;
+  }).join('')}</tr>`).join('');
+  el.innerHTML = `<table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + (r.rows.length || insRows ? '' : '<div class="empty">Empty</div>');
 }
 
 function sortBy(t, i) {
@@ -702,6 +719,138 @@ function followFk(t, ri, ci) {
   openTable(fk.table, {where: `${quoteId(driverOf(t.conn), fk.column)} = ${sqlLit(v)}`, chain: [...t.chain, crumbOf(t, col)], conn: t.conn});
 }
 
+// ------------------------------------------------------------------ editing (contract: rowbase/edit.py)
+
+const BINARY_TYPE = /binary|blob|bytea/i;
+/** {ok, reason, pk, meta} — editing needs a write-enabled connection and a primary key. */
+function editInfo(t) {
+  if (t.type !== 'table') return null;
+  const c = connOf(t.conn), m = Schema.sync(t.conn, t.table);
+  if (!c || !m) return null;
+  const pk = m.columns.filter(x => x.key === 'PRI').map(x => x.name);
+  const reason = c.readOnly ? 'Read-only connection — enable writes in Connections to edit' : !pk.length ? 'Table has no primary key — editing disabled' : '';
+  return {ok: !reason, reason, pk, meta: m};
+}
+function canEdit(t, loud) {
+  const i = editInfo(t);
+  if (!i?.ok && loud) toast(i?.reason || 'Editing is available in table tabs');
+  return !!i?.ok;
+}
+const pend = t => (t.pend ||= {set: {}, del: [], ins: []});
+const pendCount = t => (t?.pend ? Object.values(t.pend.set).filter(o => Object.keys(o).length).length + t.pend.del.length + t.pend.ins.length : 0);
+
+function updatePendBar(t) {
+  if (t.type !== 'table') return;
+  const n = pendCount(t), bar = $('.pendbar', t.el);
+  bar.hidden = !n;
+  $('.pendn', t.el).textContent = plural(n, 'change');
+  $('.addrow', t.el).hidden = !editInfo(t)?.ok;
+}
+
+function editCell(t, e) {
+  const td = e.target.closest('td[data-c]');
+  if (!td || t.type !== 'table' || t.mode !== 'grid' || !canEdit(t, true)) return;
+  const r = t.res, ci = +td.dataset.c, col = r.cols[ci], ins = td.dataset.r[0] === 'i', ri = ins ? +td.dataset.r.slice(1) : +td.dataset.r;
+  const type = editInfo(t).meta.columns.find(x => x.name === col)?.type || '';
+  if (BINARY_TYPE.test(type)) return toast(`${col} (${type}) is binary and can't be edited here`);
+  const p = pend(t), cur = ins ? p.ins[ri][col] : (p.set[ri] && col in p.set[ri] ? p.set[ri][col] : r.rows[ri][ci]);
+  closePops();
+  const pop = document.createElement('div');
+  pop.className = 'pop celled';
+  pop.innerHTML = `<div class="ch"><b>${esc(col)}</b><small>${esc(type)}</small></div><textarea class="mono" spellcheck="false"></textarea>
+    <div class="ch"><label><input type="checkbox" class="isnull"> NULL</label><span class="spacer"></span><button data-a="cancel">Cancel</button><button class="primary" data-a="ok">Apply</button></div>`;
+  const ta = $('textarea', pop), nul = $('.isnull', pop);
+  ta.value = cur ?? ''; nul.checked = cur === null && !ins;
+  nul.onchange = () => (ta.disabled = nul.checked);
+  ta.disabled = nul.checked;
+  const apply = () => {
+    const v = nul.checked ? null : ta.value;
+    if (ins) p.ins[ri][col] = v;
+    else {
+      const orig = r.rows[ri][ci], same = v === orig || (v !== null && orig !== null && String(orig) === v);
+      p.set[ri] ||= {};
+      if (same) delete p.set[ri][col]; else p.set[ri][col] = v;
+    }
+    pop.remove(); renderResult(t);
+  };
+  pop.onclick = e2 => { const a = e2.target.dataset.a; if (a === 'ok') apply(); else if (a === 'cancel') pop.remove(); };
+  ta.onkeydown = e2 => { if (e2.key === 'Enter' && (e2.metaKey || e2.ctrlKey)) { e2.preventDefault(); apply(); } if (e2.key === 'Escape') pop.remove(); };
+  placePop(pop, td);
+  ta.focus(); ta.select();
+}
+
+function changesOf(t) {
+  const {pk} = editInfo(t), r = t.res, p = t.pend, out = [];
+  const key = ri => Object.fromEntries(pk.map(k => [k, r.rows[ri][r.cols.indexOf(k)]]));
+  for (const [ri, set] of Object.entries(p.set)) if (Object.keys(set).length && !p.del.includes(+ri)) out.push({op: 'update', key: key(+ri), set});
+  for (const ri of p.del) out.push({op: 'delete', key: key(ri)});
+  for (const v of [...p.ins].reverse()) out.push({op: 'insert', values: v});
+  return out;
+}
+
+async function previewEdits(t, anchor) {
+  try {
+    const r = await api('/api/edit', {conn: t.conn, table: t.table, changes: changesOf(t), dryRun: true});
+    closePops();
+    const pop = document.createElement('div');
+    pop.className = 'pop sqlprev';
+    const text = r.statements.join(';\n') + ';';
+    pop.innerHTML = `<div class="ch"><b>${plural(r.statements.length, 'statement')} · one transaction</b><span class="spacer"></span><button data-a="copy">Copy</button></div><pre class="mono">${highlightSql(text)}</pre>`;
+    pop.onclick = e => { if (e.target.dataset.a === 'copy') navigator.clipboard.writeText(text).then(() => toast('SQL copied', true)); };
+    placePop(pop, anchor);
+  } catch (e) { toast(e.message); }
+}
+
+async function saveEdits(t) {
+  const c = connOf(t.conn), changes = changesOf(t);
+  if (!changes.length) return;
+  if (c.env === 'prod' && !confirm(`Save ${plural(changes.length, 'change')} to PRODUCTION (${c.name})?`)) return;
+  try {
+    const r = await api('/api/edit', {conn: t.conn, table: t.table, changes});
+    t.pend = null;
+    toast(`Saved ${plural(r.statements.length, 'change')}`, true);
+    Schema.clear(t.conn);
+    await runTable(t);
+  } catch (e) { toast(e.message); }  // nothing committed — pending changes stay
+}
+
+// ------------------------------------------------------------------ export (whole result, server-side)
+
+const EXPORT_FORMATS = [['csv', 'CSV'], ['tsv', 'TSV'], ['json', 'JSON'], ['md', 'Markdown'], ['sql', 'SQL INSERT']];
+function exportMenu(t, anchor) {
+  closePops();
+  const p = document.createElement('div');
+  p.className = 'pop menu';
+  p.innerHTML = EXPORT_FORMATS.map(([f, n]) => `<div data-f="${f}"><b>${n}</b><small>.${f}</small></div>`).join('');
+  p.onclick = e => { const d = e.target.closest('[data-f]'); if (d) { p.remove(); exportTo(t, d.dataset.f); } };
+  placePop(p, anchor);
+}
+async function exportTo(t, fmt) {
+  let sql, table = t.type === 'table' ? t.table : null;
+  if (t.type === 'table') sql = 'SELECT * FROM ' + qTable(t) + (t.where ? ' WHERE ' + t.where : '') + (t.order ? ' ORDER BY ' + t.order : '');
+  else {
+    sql = t.lastSql;
+    if (!sql) return toast('Run a query first');
+    if (fmt === 'sql') {
+      table = prompt('Table name for the INSERT statements', (/\bFROM\s+[`"]?([\w.]+)/i.exec(sql) || [])[1] || '');
+      if (!table) return;
+    }
+  }
+  status('Exporting…');
+  try {
+    const r = await fetch('/api/export', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Rowbase': '1'},
+      body: JSON.stringify({conn: t.conn, sql, format: fmt, table, limit: 1000000})});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    const name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || 'export.' + fmt;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    status(`Exported to ${name}`, r.headers.get('X-Rowbase-Rows-Truncated') === '1' ? 'truncated at 1,000,000 rows' : '');
+  } catch (e) { status('Export failed'); toast(e.message); }
+}
+
 // ------------------------------------------------------------------ row drawer
 
 let rowCtx = null;
@@ -710,6 +859,9 @@ function openRow(t, ri) {
   rowCtx = {t, ri};
   $('#rowTitle').textContent = `${tabTitle(t)} · #${(t.type === 'table' ? t.offset : 0) + ri + 1}`;
   $('#rowFilter').value = '';
+  const ok = t.type === 'table' && editInfo(t)?.ok;
+  $('#rowDel').hidden = !ok;
+  if (ok) $('#rowDel').textContent = pend(t).del.includes(ri) ? 'Restore row' : 'Delete row';
   renderRow();
   closeDrawer('#histDrawer');
   $('#rowDrawer').classList.add('open');
@@ -1006,6 +1158,15 @@ $('#histFilter').oninput = renderHistory;
 $('#histErrors').onchange = renderHistory;
 $('#histBody').onclick = e => { const d = e.target.closest('[data-i]'); if (d) { const h = histData[+d.dataset.i]; closeDrawer('#histDrawer'); openConsole(h.sql, {conn: connOf(h.conn) ? keyOf(h.conn, h.db) : App.conn}); } };
 $('#rowClose').onclick = () => closeDrawer('#rowDrawer');
+$('#rowDel').onclick = () => {
+  const {t, ri} = rowCtx, d = pend(t).del, i = d.indexOf(ri);
+  if (i >= 0) d.splice(i, 1); else d.push(ri);
+  closeDrawer('#rowDrawer');
+  renderResult(t);
+};
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') { const t = activeTab(); if (t && pendCount(t)) { e.preventDefault(); saveEdits(t); } }
+});
 $('#rowFilter').oninput = renderRow;
 $('#rowBody').onclick = e => {
   const ref = e.target.closest('.ref');

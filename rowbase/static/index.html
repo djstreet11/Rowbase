@@ -33,7 +33,7 @@
 <footer><span id="st">—</span><span id="stWarn" class="warn"></span><span class="spacer"></span><span id="stConn"></span></footer>
 
 <div class="drawer" id="rowDrawer">
-  <div class="dh"><b id="rowTitle"></b><input id="rowFilter" placeholder="Search field or value"><button id="rowCopy">JSON</button><button class="ghost" id="rowClose">✕</button></div>
+  <div class="dh"><b id="rowTitle"></b><input id="rowFilter" placeholder="Search field or value"><button id="rowDel" hidden>Delete row</button><button id="rowCopy">JSON</button><button class="ghost" id="rowClose">✕</button></div>
   <div class="db" id="rowBody"></div>
 </div>
 <div class="drawer" id="histDrawer">
@@ -100,7 +100,10 @@
       <button class="prev" title="Previous page">‹</button><span class="page"></span><button class="next" title="Next page">›</button>
       <button class="count" title="SELECT COUNT(*) with the current WHERE">COUNT</button>
       <span class="spacer"></span>
+      <span class="pendbar" hidden><b class="pendn"></b><button class="preview" title="Show the SQL that Save will run">Preview SQL</button><button class="discard">Discard</button><button class="primary save" title="Apply all changes in one transaction (⌘S)">Save</button></span>
+      <button class="addrow" title="Add a row (double-click cells to fill it in)">+ Row</button>
       <button class="tosql" title="Open this query in the SQL console">To console</button>
+      <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
     <div class="sqlline mono"></div>
@@ -121,6 +124,7 @@
       <span class="spacer"></span>
       <div class="seg mode"><button data-m="grid" class="on">Table</button><button data-m="transpose">Transpose</button></div>
       <button class="cols" title="Which columns to show"></button>
+      <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
     <div class="sqlline mono"></div>

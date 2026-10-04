@@ -180,3 +180,9 @@ button.dangerbtn:hover{border-color:var(--danger)}
 @media (max-width:640px){.cm{grid-template-columns:1fr}.cm-side{max-height:140px;border-right:0;border-bottom:1px solid var(--line)}}
 .ssh{border:1px solid var(--line);border-radius:6px;padding:6px 10px}.ssh summary{cursor:pointer;font-weight:500}.ssh summary small{color:var(--muted);font-weight:400;margin-left:6px}.ssh[open] summary{margin-bottom:8px}.ssh .fr2{margin-top:6px}
 #db{max-width:200px}#db.need{border-color:var(--accent);color:var(--accent)}
+.grid tr.inserted td{background:color-mix(in srgb,#2fb35a 14%,transparent)}.grid td.edited{background:color-mix(in srgb,#f5c518 28%,transparent)}
+.grid tr.deleted td{background:color-mix(in srgb,var(--danger) 12%,transparent);text-decoration:line-through;color:var(--muted)}
+.pendbar{display:flex;gap:6px;align-items:center;padding:0 6px;border-left:2px solid #f5c518}.pendbar b{font-weight:600;white-space:nowrap}
+.pop.celled{width:420px;display:flex;flex-direction:column;gap:8px;padding:10px}.pop.celled textarea{min-height:90px;resize:vertical;width:100%;border:1px solid var(--line);border-radius:6px;padding:6px;background:var(--panel)}
+.pop.celled .ch{display:flex;gap:8px;align-items:center}.pop.celled small{color:var(--muted)}
+.pop.sqlprev{max-width:min(760px,90vw);padding:10px}.pop.sqlprev pre{max-height:50vh;overflow:auto;margin:8px 0 0;white-space:pre-wrap}.pop.sqlprev .ch{display:flex;gap:8px;align-items:center}
