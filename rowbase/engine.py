@@ -124,7 +124,7 @@ def _open(c, pw, timeout):
         raise QueryError(f"Connection error: {e}")
 
 
-def execute(conn, sql, limit=100, timeout=30, ref_style="uuid", pooled=False, trusted=False):
+def execute(conn, sql, limit=100, timeout=30, ref_style="uuid", pooled=False, trusted=False, fetch_cap=None):
     """Run one statement; returns {cols, rows, truncated, elapsed, affected}. Raises QueryError."""
     c, pw = resolve(conn)
     drv = drivers.get(c["driver"])
@@ -158,7 +158,8 @@ def execute(conn, sql, limit=100, timeout=30, ref_style="uuid", pooled=False, tr
         try:
             cur = drv.run(db, clean)
             desc = cur.description
-            rows = cur.fetchmany(int(limit) + 1 if limited else FETCH_CAP + 1) if desc else []
+            cap_unlimited = int(fetch_cap or FETCH_CAP)
+            rows = cur.fetchmany(int(limit) + 1 if limited else cap_unlimited + 1) if desc else []
             affected = None if desc else cur.rowcount
         except Exception as e:  # SQL errors are expected while exploring; report them plainly
             healthy = drv.alive(db)
@@ -181,7 +182,7 @@ def execute(conn, sql, limit=100, timeout=30, ref_style="uuid", pooled=False, tr
             _give(key, db)
         else:
             _close(db)
-    cap = int(limit) if limited else FETCH_CAP
+    cap = int(limit) if limited else int(fetch_cap or FETCH_CAP)
     truncated = len(rows) > cap
     rows = [[fmt_value(v, ref_style) for v in r] for r in rows[:cap]]
     return {"cols": cols, "rows": rows, "truncated": truncated, "elapsed": elapsed, "affected": affected}

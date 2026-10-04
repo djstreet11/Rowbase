@@ -254,6 +254,15 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(hist[0]["connName"], "srv")
         self.assertIn("error", hist[0])
 
+    def test_export(self):
+        req = urllib.request.Request(self.url + "/api/export", headers={"X-Rowbase": "1"},
+                                     data=json.dumps({"conn": self.cid, "sql": "SELECT * FROM t", "format": "csv", "table": "t"}).encode())
+        with urllib.request.urlopen(req) as r:
+            self.assertEqual(r.headers["Content-Disposition"], 'attachment; filename="t.csv"')
+            self.assertEqual(r.read().decode(), "id,v\r\n1,a\r\n")
+        code, err = self.call("/api/export", {"conn": self.cid, "sql": "DELETE FROM t", "format": "csv"})
+        self.assertEqual(code, 400)  # read-only guard applies to exports too
+
     def test_security(self):
         self.assertEqual(self.call("/api/conns", headers={"X-Rowbase": "0"})[0], 403)
         self.assertEqual(self.call("/api/conns", headers={"Host": "evil.example"})[0], 403)

@@ -11,7 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import edit, engine, store
+from . import edit, engine, export, store
 from .guard import QueryError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -131,6 +131,26 @@ def run_query(body):
     return res
 
 
+EXPORT_MAX = 1_000_000
+
+
+def run_export(body):
+    """Re-runs the statement with a high row cap and returns (filename, mime, bytes)."""
+    cid, db = ref(body["conn"], body.get("db"))
+    c = store.get(cid)
+    fmt = body.get("format", "csv")
+    if fmt not in export.FORMATS:
+        raise QueryError(f"Unknown export format '{fmt}'")
+    limit = max(1, min(int(body.get("limit") or 100_000), EXPORT_MAX))
+    conn = engine.with_database(c["id"], db)
+    res = engine.execute(conn, body["sql"], limit=limit, timeout=int(body.get("timeout") or 120), pooled=True, fetch_cap=limit)
+    text = export.render(res["cols"], res["rows"], fmt, body.get("table"), engine.dialect(conn))
+    history_add({"conn": c["id"], "connName": c["name"], "sql": body["sql"], "source": f"export:{fmt}", "rows": len(res["rows"]),
+                 "elapsed": round(res["elapsed"], 3), **({"db": db} if db else {})})
+    name = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in (body.get("table") or "export"))
+    return f"{name}.{fmt}", export.FORMATS[fmt], text.encode(), res["truncated"]
+
+
 def run_edit(body):
     cid, db = ref(body["conn"], body.get("db"))
     c = store.get(cid)
@@ -200,6 +220,19 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:
             return self.send(400, {"error": "bad JSON"})
+        if url.path == "/api/export":
+            try:
+                name, mime, data, truncated = run_export(body)
+            except (QueryError, ValueError, KeyError) as e:
+                return self.send(400, {"error": str(e)})
+            self.send_response(200)
+            self.send_header("Content-Type", mime + "; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+            self.send_header("X-Rowbase-Rows-Truncated", "1" if truncated else "0")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         routes = {
             "/api/query": lambda: run_query(body),
             "/api/conns/save": lambda: conn_save(body),

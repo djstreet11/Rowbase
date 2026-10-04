@@ -1,0 +1,35 @@
+{
+ "_doc": "Export conformance vectors shared by Python (tests/test_export.py) and Swift. Values are strings or null.",
+ "cols": [
+  "id",
+  "name",
+  "note"
+ ],
+ "rows": [
+  [
+   "1",
+   "a,b",
+   "say \"hi\""
+  ],
+  [
+   "2",
+   null,
+   "line\nbreak | pipe\ttab"
+  ],
+  [
+   "3",
+   "it's \\ ok",
+   ""
+  ]
+ ],
+ "table": "crm.orders",
+ "expected": {
+  "csv": "id,name,note\r\n1,\"a,b\",\"say \"\"hi\"\"\"\r\n2,,\"line\nbreak | pipe\ttab\"\r\n3,it's \\ ok,\r\n",
+  "tsv": "id\tname\tnote\n1\ta,b\tsay \"hi\"\n2\t\tline break | pipe tab\n3\tit's \\ ok\t\n",
+  "json": "[\n  {\n    \"id\": \"1\",\n    \"name\": \"a,b\",\n    \"note\": \"say \\\"hi\\\"\"\n  },\n  {\n    \"id\": \"2\",\n    \"name\": null,\n    \"note\": \"line\\nbreak | pipe\\ttab\"\n  },\n  {\n    \"id\": \"3\",\n    \"name\": \"it's \\\\ ok\",\n    \"note\": \"\"\n  }\n]\n",
+  "md": "| id | name | note |\n|---|---|---|\n| 1 | a,b | say \"hi\" |\n| 2 | NULL | line break \\| pipe\ttab |\n| 3 | it's \\ ok |  |\n",
+  "sql_mysql": "INSERT INTO `orders` (`id`, `name`, `note`) VALUES ('1', 'a,b', 'say \"hi\"');\nINSERT INTO `orders` (`id`, `name`, `note`) VALUES ('2', NULL, 'line\nbreak | pipe\ttab');\nINSERT INTO `orders` (`id`, `name`, `note`) VALUES ('3', 'it''s \\\\ ok', '');\n",
+  "sql_postgres": "INSERT INTO \"crm\".\"orders\" (\"id\", \"name\", \"note\") VALUES ('1', 'a,b', 'say \"hi\"');\nINSERT INTO \"crm\".\"orders\" (\"id\", \"name\", \"note\") VALUES ('2', NULL, 'line\nbreak | pipe\ttab');\nINSERT INTO \"crm\".\"orders\" (\"id\", \"name\", \"note\") VALUES ('3', 'it''s \\ ok', '');\n",
+  "sql_sqlite": "INSERT INTO \"orders\" (\"id\", \"name\", \"note\") VALUES ('1', 'a,b', 'say \"hi\"');\nINSERT INTO \"orders\" (\"id\", \"name\", \"note\") VALUES ('2', NULL, 'line\nbreak | pipe\ttab');\nINSERT INTO \"orders\" (\"id\", \"name\", \"note\") VALUES ('3', 'it''s \\ ok', '');\n"
+ }
+}
