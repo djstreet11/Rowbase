@@ -71,3 +71,4 @@ short: facts and rules only, no history.
 - 2026-10-04: psycopg → pg8000: pg8000 run()/execute() ALLOW multi-statements; only prepare() is safe. Never use run() for user SQL.
 - 2026-10-04: User wants one-file, no-admin distribution for macOS/Linux/Windows; native app embeds the one-file CLI for MCP.
 - 2026-10-04: Debian 11 images are EOL (repo 404) — use manylinux_2_28 for portable Linux builds.
+- 2026-10-04: Nuitka one-file default unpacks to a fresh temp dir every run (~5 s on macOS) → cached tempdir spec makes it 0.1 s.

@@ -21,4 +21,5 @@ cross-compile, so Windows binaries come from a Windows machine or CI; Linux bina
 - Unsigned binaries: Windows SmartScreen shows "Windows protected your PC" → *More info* → *Run anyway*;
   macOS: right-click → Open (or `xattr -d com.apple.quarantine rowbase-macos-arm64`). Code-signing certificates
   remove these prompts (optional, paid).
-- First start unpacks to a per-user cache dir (a second or two); later starts are fast.
+- First start unpacks once per version into the user cache dir (~5 s on macOS); later starts take ~0.1 s
+  (`--onefile-tempdir-spec={CACHE_DIR}/rowbase/{VERSION}` — important for MCP clients that spawn the server per session).

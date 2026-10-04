@@ -19,6 +19,9 @@ args = [sys.executable, "-m", "nuitka", "--onefile", "--assume-yes-for-downloads
         f"--output-dir={os.path.join(ROOT, 'dist')}", f"--output-filename={name}",
         "--include-package=rowbase", "--include-package=pymysql", "--include-package=pg8000",
         "--no-deployment-flag=self-execution",  # our CLI has its own -c (connection) flag
+        # unpack once per version into the user cache (not a fresh temp dir per run: ~5 s → instant on later starts,
+        # important for MCP clients that spawn the server per session)
+        "--onefile-tempdir-spec={CACHE_DIR}/rowbase/{VERSION}", "--onefile-cache-mode=cached",
         "--include-package=keyring", "--include-distribution-metadata=keyring",  # keyring finds backends via entry points
         f"--include-data-dir={os.path.join(ROOT, 'rowbase', 'static')}=rowbase/static",
         "--nofollow-import-to=tkinter,unittest,test,pydoc,doctest",
