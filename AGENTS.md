@@ -77,3 +77,6 @@ short: facts and rules only, no history.
 - 2026-10-04: User's real Rowbase connections (test, klium) are MySQL read-only and contain personal data — keep MCP read-only by default.
 - 2026-10-04: GitHub CI: macos runners default to an older Xcode → use maxim-lobanov/setup-xcode latest-stable (Swift 6.2). Job logs need
   admin rights; read failures via public annotations API (/check-runs/<job>/annotations) — CI echoes errors as ::error::. `gh` not installed.
+- 2026-10-04: Promotion kit lives in docs/PROMOTION.md (repo About text, 20 topics, release notes, directories, post drafts);
+  social preview = `swift docs/assets/make-social.swift`; README screenshots in docs/assets (scratch data only — never real DB data).
+- 2026-10-04: PyPI name `rowbase` is taken by an unrelated project → publish as `rowbase-db` (command stays `rowbase`).
