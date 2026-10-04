@@ -316,3 +316,69 @@ class SSHTunnelTest(unittest.TestCase):
         with self.assertRaises(QueryError):
             store.normalize({"name": "x", "driver": "mysql", "ssh": {"user": "a"}})
         self.assertNotIn("ssh", store.normalize({"name": "x", "driver": "sqlite", "path": "/a", "ssh": {"host": "h"}}))
+
+
+class EditTest(unittest.TestCase):
+    """Row editing contract (rowbase/edit.py) on SQLite, Postgres and MySQL with their own fresh fixtures."""
+
+    def fixture(self, driver, orders):
+        if driver == "sqlite":
+            path = os.path.join(TMP, "edit.db")
+            if os.path.exists(path):
+                os.remove(path)
+            sqlite3.connect(path).close()
+            fields, pw = {"driver": "sqlite", "path": path}, None
+        else:
+            try:
+                fields, pw = recreate(driver, PG_URL if driver == "postgres" else MY_URL)
+            except Exception as e:
+                self.skipTest(f"{driver} not available: {e}")
+        rw = store.upsert({**fields, "name": f"edit-{driver}-rw", "readOnly": False}, pw or "")["id"]
+        for sql in SCHEMA[driver] + DATA:
+            engine.execute(rw, sql.format(orders=orders))
+        ro = store.upsert({**fields, "name": f"edit-{driver}-ro"}, pw or "")["id"]
+        return rw, ro
+
+    def run_on(self, driver, t):
+        from rowbase import edit
+        rw, ro = self.fixture(driver, t)
+        q = engine.dialect(ro).ident(t)
+        # dry run returns SQL without touching data
+        r = edit.apply(rw, t, [{"op": "update", "key": {"id": "1"}, "set": {"note": "edited", "total": None}}], dry_run=True)
+        self.assertEqual(len(r["statements"]), 1)
+        self.assertIn("UPDATE", r["statements"][0])
+        self.assertEqual(engine.execute(ro, f"SELECT note FROM {q} WHERE id = 1")["rows"][0][0], "50% off")
+        # atomic batch: insert + update + update-to-same-value + delete
+        r = edit.apply(rw, t, [{"op": "insert", "values": {"user_id": "2", "total": "1.5", "note": "new"}},
+                               {"op": "update", "key": {"id": "1"}, "set": {"note": "it's \\ edited"}},
+                               {"op": "update", "key": {"id": "2"}, "set": {"total": "3"}},
+                               {"op": "delete", "key": {"id": "3"}}])
+        self.assertEqual(r["affected"], [1, 1, 1, 1])
+        rows = {int(row[0]): row[1] for row in engine.execute(ro, f"SELECT id, note FROM {q} ORDER BY id")["rows"]}
+        self.assertEqual(rows[1], "it's \\ edited")
+        self.assertNotIn(3, rows)
+        self.assertIn("new", rows.values())
+        # a missing row rolls back the whole batch
+        with self.assertRaises(QueryError):
+            edit.apply(rw, t, [{"op": "update", "key": {"id": "1"}, "set": {"note": "rolled back"}},
+                               {"op": "delete", "key": {"id": "999"}}])
+        self.assertEqual(engine.execute(ro, f"SELECT note FROM {q} WHERE id = 1")["rows"][0][0], "it's \\ edited")
+        # validation
+        for bad in ([{"op": "update", "key": {"user_id": "1"}, "set": {"note": "x"}}],      # not the PK
+                    [{"op": "update", "key": {"id": "1"}, "set": {"nope": "x"}}],          # unknown column
+                    [{"op": "update", "key": {"id": "1"}, "set": {"note; DROP": "x"}}],    # injection via name
+                    [{"op": "drop"}]):
+            with self.assertRaises(QueryError):
+                edit.apply(rw, t, bad)
+        with self.assertRaises(QueryError):
+            edit.apply(ro, t, [{"op": "delete", "key": {"id": "1"}}])                     # read-only connection
+        engine.reset_pool()
+
+    def test_sqlite(self):
+        self.run_on("sqlite", "orders")
+
+    def test_postgres(self):
+        self.run_on("postgres", "crm.orders")
+
+    def test_mysql(self):
+        self.run_on("mysql", "orders")

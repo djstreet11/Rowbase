@@ -45,6 +45,39 @@ final class SQLiteSession: DBSession, @unchecked Sendable {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw error() }
     }
 
+    func txBegin(timeout: Int) async throws {
+        try lock.withLock {
+            guard db != nil else { throw RowbaseError("Connection closed.") }
+            deadline.at = Date().timeIntervalSince1970 + Double(timeout)
+            try exec("BEGIN")
+        }
+    }
+
+    func txExec(_ sql: String) async throws -> (affected: Int, first: String?) {
+        try lock.withLock {
+            var stmt: OpaquePointer?, tail: UnsafePointer<CChar>?
+            let bytes = Array(sql.utf8CString)
+            guard bytes.withUnsafeBufferPointer({ sqlite3_prepare_v2(db, $0.baseAddress, -1, &stmt, &tail) }) == SQLITE_OK else { throw error() }
+            defer { sqlite3_finalize(stmt) }
+            if let tail, tail.pointee != 0 {
+                var next: OpaquePointer?
+                sqlite3_prepare_v2(db, tail, -1, &next, nil)
+                if next != nil { sqlite3_finalize(next); throw RowbaseError("SQL error: You can only execute one statement at a time.") }
+            }
+            var first: String?
+            switch sqlite3_step(stmt) {
+            case SQLITE_ROW: first = sqlite3_column_text(stmt, 0).map { String(cString: $0) }
+            case SQLITE_DONE: break
+            default: throw error()
+            }
+            return (Int(sqlite3_changes(db)), first)
+        }
+    }
+
+    func txCommit() async throws { try lock.withLock { defer { deadline.at = 0 }; try exec("COMMIT") } }
+
+    func txRollback() async { lock.withLock { deadline.at = 0; sqlite3_exec(db, "ROLLBACK", nil, nil, nil) } }
+
     func run(_ sql: String, readOnly: Bool, timeout: Int, maxRows: Int) async throws -> QueryResult {
         try lock.withLock {
             guard db != nil else { throw RowbaseError("Connection closed.") }

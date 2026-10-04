@@ -10,6 +10,13 @@ public protocol DBSession: AnyObject, Sendable {
     var cancelSQL: String? { get }
     /// In-process cancel (SQLite). Must be safe to call from any thread while `run` is executing.
     func interrupt()
+
+    // Write-transaction primitives for row editing (Edit.swift). Still one statement per call; caller commits or rolls back.
+    func txBegin(timeout: Int) async throws
+    /// Returns rows affected and the first cell of the first result row (for verification queries).
+    func txExec(_ sql: String) async throws -> (affected: Int, first: String?)
+    func txCommit() async throws
+    func txRollback() async
 }
 
 public extension DBSession {

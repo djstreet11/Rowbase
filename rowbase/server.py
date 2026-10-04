@@ -11,7 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import engine, store
+from . import edit, engine, store
 from .guard import QueryError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -131,6 +131,17 @@ def run_query(body):
     return res
 
 
+def run_edit(body):
+    cid, db = ref(body["conn"], body.get("db"))
+    c = store.get(cid)
+    res = edit.apply(engine.with_database(c["id"], db), body["table"], body.get("changes") or [], dry_run=bool(body.get("dryRun")))
+    if not body.get("dryRun") and res["statements"]:
+        for sql in res["statements"]:
+            history_add({"conn": c["id"], "connName": c["name"], "sql": sql, "source": "edit", "affected": 1, **({"db": db} if db else {})})
+        drop_cache(c["id"])
+    return res
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "rowbase"
 
@@ -194,6 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/conns/save": lambda: conn_save(body),
             "/api/conns/delete": lambda: conn_delete(body),
             "/api/conns/test": lambda: conn_test(body),
+            "/api/edit": lambda: run_edit(body),
             "/api/refresh": lambda: drop_cache(body.get("conn")) or {"ok": True},
         }
         if url.path in routes:

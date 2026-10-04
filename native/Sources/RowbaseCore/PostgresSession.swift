@@ -63,6 +63,20 @@ final class PostgresSession: DBSession, @unchecked Sendable {
         do { return try await conn.query(sql, []).get() } catch { throw RowbaseError("SQL error: \(Self.message(error))") }
     }
 
+    func txBegin(timeout: Int) async throws {
+        _ = try await exec("BEGIN")
+        _ = try await exec("SET LOCAL statement_timeout = \(timeout * 1000)")
+    }
+
+    func txExec(_ sql: String) async throws -> (affected: Int, first: String?) {
+        let r = try await exec(sql)
+        return (r.metadata.rows ?? 0, r.rows.first.flatMap { PGFormat.cell($0.makeRandomAccess()[0]) })
+    }
+
+    func txCommit() async throws { _ = try await exec("COMMIT") }
+
+    func txRollback() async { _ = try? await conn.query("ROLLBACK", []).get() }
+
     func run(_ sql: String, readOnly: Bool, timeout: Int, maxRows: Int) async throws -> QueryResult {
         _ = try await exec(readOnly ? "BEGIN READ ONLY" : "BEGIN")
         var done = false

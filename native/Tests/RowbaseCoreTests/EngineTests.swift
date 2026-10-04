@@ -10,8 +10,8 @@ enum Fixture {
     static let home = FileManager.default.temporaryDirectory.appendingPathComponent("rowbase-swift-engine-\(UUID().uuidString)")
     static let store = ConnectionStore(home: home, fileSecretsOnly: true)
 
-    static func sqlitePath() -> String {
-        let path = home.appendingPathComponent("t.db").path
+    static func sqlitePath(_ file: String = "t.db") -> String {
+        let path = home.appendingPathComponent(file).path
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: path) {
             var db: OpaquePointer?
@@ -29,12 +29,12 @@ enum Fixture {
     }
 
     /// (read-only, read-write) connections or nil when the server is unreachable.
-    static func make(_ d: Dialect) async -> (Connection, Connection, String)? {
+    static func make(_ d: Dialect, sqliteFile: String = "t.db") async -> (Connection, Connection, String)? {
         let engine = Engine(store: store)
         defer { Task { await engine.reset() } }
         switch d {
         case .sqlite:
-            let p = sqlitePath()
+            let p = sqlitePath(sqliteFile)
             return (Connection(name: "lite-ro", driver: "sqlite", path: p), Connection(name: "lite-rw", driver: "sqlite", path: p, readOnly: false), "orders")
         case .postgres:
             let rw = Connection(name: "pg-rw", driver: "postgres", socket: "/tmp", database: "rowbase_test", readOnly: false)
@@ -163,6 +163,37 @@ enum Fixture {
         catch let err as RowbaseError { #expect(err.message == "Query cancelled.", "\(d): \(err.message)") }
         #expect(Date().timeIntervalSince(started) < 5, "\(d): cancel took too long")
         #expect(try await e.execute(ro, "SELECT 1").rows[0][0] == "1")  // session still usable
+        await e.reset()
+    }
+
+    @Test(arguments: Dialect.allCases)
+    func rowEditing(_ d: Dialect) async throws {
+        guard let (ro, rw, t) = await Fixture.make(d, sqliteFile: "edit.db") else { print("skip edit \(d)"); return }
+        let e = Engine(store: Fixture.store)
+        let q = d.ident(t)
+        func note(_ id: Int) async throws -> String? { try await e.execute(ro, "SELECT note FROM \(q) WHERE id = \(id)").rows.first?[0] ?? nil }
+        let dry = try await e.apply(rw, table: t, changes: [.update(key: [.init("id", "1")], set: [.init("note", "x"), .init("total", nil)])], dryRun: true)
+        #expect(dry.statements.count == 1 && dry.statements[0].hasPrefix("UPDATE") && dry.affected.isEmpty)
+        #expect(try await note(1) == "50% off")
+        let r = try await e.apply(rw, table: t, changes: [
+            .insert([.init("user_id", "2"), .init("total", "1.5"), .init("note", "new")]),
+            .update(key: [.init("id", "1")], set: [.init("note", "it's \\ edited")]),
+            .update(key: [.init("id", "2")], set: [.init("total", "3")]),  // same value: MySQL reports 0 rows → verified
+            .delete(key: [.init("id", "3")]),
+        ])
+        #expect(r.affected == [1, 1, 1, 1], "\(d)")
+        #expect(try await note(1) == "it's \\ edited")
+        #expect(try await e.execute(ro, "SELECT COUNT(*) FROM \(q) WHERE id = 3").rows[0][0] == "0")
+        await #expect(throws: RowbaseError.self) {  // missing row → whole batch rolled back
+            try await e.apply(rw, table: t, changes: [.update(key: [.init("id", "1")], set: [.init("note", "rolled back")]), .delete(key: [.init("id", "999")])])
+        }
+        #expect(try await note(1) == "it's \\ edited")
+        for bad: [RowChange] in [[.update(key: [.init("user_id", "1")], set: [.init("note", "x")])],
+                                 [.update(key: [.init("id", "1")], set: [.init("nope", "x")])],
+                                 [.update(key: [.init("id", "1")], set: [.init("note; DROP", "x")])]] {
+            await #expect(throws: RowbaseError.self) { try await e.apply(rw, table: t, changes: bad) }
+        }
+        await #expect(throws: RowbaseError.self) { try await e.apply(ro, table: t, changes: [.delete(key: [.init("id", "1")])]) }
         await e.reset()
     }
 

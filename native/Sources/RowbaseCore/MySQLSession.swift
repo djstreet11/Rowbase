@@ -46,6 +46,28 @@ final class MySQLSession: DBSession, @unchecked Sendable {
         do { return try await conn.simpleQuery(sql).get() } catch { throw RowbaseError("SQL error: \(Self.message(error))") }
     }
 
+    func txBegin(timeout: Int) async throws {
+        if timeoutSet != timeout {
+            _ = try? await conn.simpleQuery("SET SESSION max_execution_time=\(timeout * 1000)").get()
+            _ = try? await conn.simpleQuery("SET SESSION max_statement_time=\(timeout)").get()
+            timeoutSet = timeout
+        }
+        try await exec("START TRANSACTION")
+    }
+
+    func txExec(_ sql: String) async throws -> (affected: Int, first: String?) {
+        let rows = try await exec(sql)
+        if let r = rows.first, let v = r.values.first {
+            return (0, v.map { String(decoding: $0.readableBytesView, as: UTF8.self) })
+        }
+        let n = try await exec("SELECT ROW_COUNT()").first?.column("ROW_COUNT()")?.int ?? 0
+        return (n, nil)
+    }
+
+    func txCommit() async throws { try await exec("COMMIT") }
+
+    func txRollback() async { _ = try? await conn.simpleQuery("ROLLBACK").get() }
+
     func run(_ sql: String, readOnly: Bool, timeout: Int, maxRows: Int) async throws -> QueryResult {
         if timeoutSet != timeout {
             _ = try? await conn.simpleQuery("SET SESSION max_execution_time=\(timeout * 1000)").get()  // MySQL
