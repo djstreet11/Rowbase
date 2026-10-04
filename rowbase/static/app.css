@@ -178,3 +178,4 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 button.dangerbtn{color:var(--danger)}
 button.dangerbtn:hover{border-color:var(--danger)}
 @media (max-width:640px){.cm{grid-template-columns:1fr}.cm-side{max-height:140px;border-right:0;border-bottom:1px solid var(--line)}}
+.ssh{border:1px solid var(--line);border-radius:6px;padding:6px 10px}.ssh summary{cursor:pointer;font-weight:500}.ssh summary small{color:var(--muted);font-weight:400;margin-left:6px}.ssh[open] summary{margin-bottom:8px}.ssh .fr2{margin-top:6px}

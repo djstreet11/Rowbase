@@ -60,6 +60,10 @@
           <label class="fr"><span>Socket</span><input id="cf_socket" placeholder="optional, e.g. /tmp/mysql.sock"></label>
           <label class="fr"><span>Database</span><input id="cf_database"></label>
           <div class="fr2"><label class="fr"><span>User</span><input id="cf_user"></label><label class="fr"><span>Password</span><input id="cf_password" type="password" autocomplete="new-password"></label></div>
+          <details class="ssh" id="cfSsh"><summary>SSH tunnel <small>key / agent auth via system ssh, ~/.ssh/config applies</small></summary>
+            <div class="fr2"><label class="fr"><span>SSH host</span><input id="cf_sshHost" placeholder="bastion.example.com or ~/.ssh/config alias"></label><label class="fr"><span>SSH port</span><input id="cf_sshPort" type="number" min="1" max="65535" placeholder="22"></label></div>
+            <div class="fr2"><label class="fr"><span>SSH user</span><input id="cf_sshUser" placeholder="from ~/.ssh/config"></label><label class="fr"><span>Identity file</span><input id="cf_sshKey" placeholder="~/.ssh/id_ed25519 (optional)"></label></div>
+          </details>
         </div>
         <label class="fr file" hidden><span>File path</span><input id="cf_path" placeholder="/path/to/database.sqlite"></label>
         <div class="fr2">

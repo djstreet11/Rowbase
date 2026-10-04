@@ -851,6 +851,9 @@ function cmDriver() {
 function cmLoad(c) {
   CM.id = c?.id || null;
   CM.options = c?.options ? {...c.options} : null;
+  const ssh = c?.ssh || {};
+  cf('sshHost').value = ssh.host || ''; cf('sshPort').value = ssh.port || ''; cf('sshUser').value = ssh.user || ''; cf('sshKey').value = ssh.identityFile || '';
+  $('#cfSsh').open = !!ssh.host;
   CF_TEXT.forEach(n => (cf(n).value = c?.[n] ?? ''));
   cf('driver').value = c?.driver || 'mysql';
   cf('port').value = c?.port ?? '';
@@ -881,6 +884,8 @@ function cmRead() {
   if (cf('env').value) o.env = cf('env').value;
   if (cf('color').hasAttribute('data-on')) o.color = cf('color').value;
   if (CM.options && d !== 'sqlite') o.options = CM.options;
+  const sshHost = cf('sshHost').value.trim();
+  if (sshHost && d !== 'sqlite') o.ssh = {host: sshHost, port: cf('sshPort').value ? +cf('sshPort').value : null, user: cf('sshUser').value.trim(), identityFile: cf('sshKey').value.trim()};
   if (d === 'sqlite') { o.host = ''; o.socket = ''; o.database = ''; o.user = ''; o.port = null; } else o.path = '';
   const pw = cf('password').value;
   return {conn: o, password: CM.id && pw === '' ? null : pw};
@@ -896,8 +901,10 @@ function parseConnUrl(str) {
   const qs = Object.fromEntries(new URLSearchParams(u[6] || ''));
   const socket = qs.socket || '';
   delete qs.socket;
+  let ssh = null;  // ?ssh=user@bastion:22
+  if (qs.ssh) { const m = /^(?:([^@]+)@)?([^:]+)(?::(\d+))?$/.exec(qs.ssh); if (m) ssh = {user: m[1] || '', host: m[2], port: m[3] || ''}; delete qs.ssh; }
   return {driver: sc.startsWith('postgres') ? 'postgres' : 'mysql', host: dec(u[3] || ''), port: u[4] || '', user: dec(u[1] || ''),
-    password: dec(u[2] || ''), database: dec(u[5] || ''), socket, options: Object.keys(qs).length ? qs : null};
+    password: dec(u[2] || ''), database: dec(u[5] || ''), socket, options: Object.keys(qs).length ? qs : null, ssh};
 }
 function cmSay(msg, ok) { const el = $('#cmRes'); el.textContent = msg; el.className = 'cm-res ' + (ok ? 'ok' : 'err'); }
 async function cmSave() {
@@ -946,7 +953,11 @@ $('#cf_colorX').onclick = () => cf('color').removeAttribute('data-on');
 cf('url').oninput = () => {
   const p = parseConnUrl(cf('url').value);
   if (!p) return;
-  for (const [k, v] of Object.entries(p)) if (k === 'options') CM.options = v; else cf(k).value = v ?? '';
+  for (const [k, v] of Object.entries(p)) {
+    if (k === 'options') CM.options = v;
+    else if (k === 'ssh') { if (v) { cf('sshHost').value = v.host; cf('sshPort').value = v.port; cf('sshUser').value = v.user; $('#cfSsh').open = true; } }
+    else cf(k).value = v ?? '';
+  }
   cf('url').value = '';
   cmDriver();
 };
