@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-04 (row editing + export in both tracks, native parity).
+> Last update: 2026-10-04 (Apache-2.0, MCP server, one-file builds, pg8000).
 
 ## 1. Origin & idea
 
@@ -22,18 +22,19 @@ universal re-implementation — nothing company-specific is carried over.
 ```
 rowbase/
   guard.py    dialect-aware read-only guard (length-preserving scanner: comments, quotes, E'' and $$ strings)
-  drivers.py  MySQL (pymysql), Postgres (psycopg 3), SQLite (stdlib): connect, begin, run, catalog SQL
+  drivers.py  MySQL (PyMySQL), Postgres (pg8000 via prepare(): one statement), SQLite (stdlib): connect, begin, run, catalog SQL
+  mcp.py      MCP server (stdio) + toon.py (token-efficient output); edit.py (row editing); export.py; tunnel.py (SSH)
   store.py    connections.json + secrets (keyring / 0600 file / env), URL parsing
   engine.py   execute (guard, auto LIMIT, pool, RO/RW tx), formatting, catalog (tables, table_info with FKs)
   cli.py      `rowbase add|rm|conns|ping|tables|desc|q|ui`
   server.py   stdlib HTTP server (127.0.0.1) + JSON API + history
   static/     vanilla JS/CSS UI (index.html, app.js, app.css)
 tests/        unittest: guard, engine+catalog on real SQLite/PG/MySQL, store, HTTP API
-pyproject.toml  deps: pymysql, psycopg[binary], keyring
+pyproject.toml  deps (all pure Python): PyMySQL, pg8000, keyring · packaging/ one-file Nuitka builds
 ```
 
 ### 2.1 Safety model (read-only connections — the default)
-1. **Driver**: exactly one statement per call — pymysql without MULTI_STATEMENTS, psycopg prepared (extended protocol),
+1. **Driver**: exactly one statement per call — PyMySQL without MULTI_STATEMENTS, pg8000 `prepare()` (protocol Parse),
    sqlite3 `execute`. Verified by tests even with the guard bypassed.
 2. **Guard**: one statement; first keyword allow-list per dialect; forbidden patterns (locks, sleep, file I/O, `set_config`,
    PG `INTO`, sqlite `load_extension`, …).
@@ -170,3 +171,12 @@ Deferred; keep contracts (§5) portable.
 ## 7. Open questions
 - License / monetization (open source? free core?).
 - UI languages beyond English (user speaks Russian/Ukrainian).
+
+
+## 8. Open source, distribution, AI
+- License: **Apache-2.0** (LICENSE, NOTICE, THIRD_PARTY_LICENSES.md — all deps permissive). README/CONTRIBUTING/SECURITY.
+- One-file binaries (CLI + web UI + MCP): macOS arm64, Linux arm64/x64 (glibc ≥ 2.28), Windows x64 (10/11) — docs/BUILDING.md,
+  GitHub Actions release on tag. No installer, no admin, no Python on the target. No-arg start opens the web UI.
+- Native app embeds the macOS one-file binary (Contents/Resources/rowbase) → identical MCP server; AI / MCP sheet.
+- MCP server: tools guide/connections/databases/tables/describe/search_schema/sample/count/query/explain (+apply_changes when
+  allowed), TOON output, knowledge-base guide + resources + prompts, settings shared by CLI/web/native — docs/MCP.md.

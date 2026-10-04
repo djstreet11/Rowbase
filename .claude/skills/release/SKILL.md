@@ -15,3 +15,12 @@ See docs/RELEASING.md for the full guide. Key facts:
 - Icon: `swift scripts/make-icon.swift` (cwd native/) regenerates Resources/AppIcon.icns; bundle.sh copies it.
 - Verify a DMG: `hdiutil attach -nobrowse -readonly …`, check Info.plist version and `codesign -dv`, then detach.
 - Hardened runtime entitlements: native/Rowbase.entitlements (empty: not sandboxed; network + ssh subprocess need nothing).
+
+## One-file CLI/UI/MCP binaries (docs/BUILDING.md)
+- macOS: `.venv/bin/python packaging/build.py` → dist/rowbase-macos-arm64 (~10 MB, ~3 min). Needs `--static-libpython=no` (Homebrew).
+- Linux: `bash packaging/build-linux.sh arm64|x64` (Docker, quay.io/pypa/manylinux_2_28_*, unpack static-libs tarball) →
+  glibc 2.28 → Ubuntu 20.04+. x64 on Apple Silicon is emulated (slow). Verify with `docker run ubuntu:20.04 … doctor`.
+- Windows: only on Windows or via .github/workflows/release.yml (windows-2022 runner → runs on Win10 + Win11).
+- Always rebuild dist/rowbase-macos-arm64 BEFORE native/scripts/release.sh — bundle.sh embeds it as Resources/rowbase (MCP).
+- Pitfalls: Nuitka "self-execution" flag breaks our `-c` → `--no-deployment-flag=self-execution`; one-file binaries may get
+  ASCII stdio/argv in C locale → cli._utf8_stdio + surrogate argv repair; keyring needs `--include-distribution-metadata=keyring`.

@@ -16,7 +16,7 @@ Linux/Windows — far future.
 - `SPEC.md` — spec & roadmap (§5 = cross-track contracts). `docs/decisions.md` — ADRs.
 - `native/` — Swift app: `RowbaseCore` (store, Keychain, guard, drivers, engine) + `Rowbase` (SwiftUI/AppKit UI). `swift test`.
 - `tests/guard_vectors.json` — guard conformance cases shared by Python and Swift suites.
-- `.claude/skills/` — `learn` (self-update), `db-query` (use the CLI), `run-ui` (web UI), `add-driver`, `native-app` (build/test/snapshot Mac app).
+- `.claude/skills/` — `learn` (self-update), `db-query` (use the CLI), `run-ui` (web UI), `add-driver`, `native-app` (build/test/snapshot Mac app), `release` (DMG + one-file builds), `mcp`.
 
 ## Rules
 - **Language**: code, comments, docs, commits, UI strings in English. Final user-facing report in Russian.
@@ -67,3 +67,7 @@ short: facts and rules only, no history.
 - 2026-10-04: MariaDB has no EXPLAIN ANALYZE → engines rewrite to `ANALYZE <stmt>` (detected via VERSION()).
 - 2026-10-04: User wants a professional, TablePlus-level look; design decisions recorded in native-app skill — reuse them.
 - 2026-10-04: No Developer ID cert on this Mac → DMG is ad-hoc; notarization pipeline ready (docs/RELEASING.md), needs user's Apple account.
+- 2026-10-04: Project is OSS under Apache-2.0 (user plans JetBrains OSS license application) — keep deps permissive (no GPL/LGPL).
+- 2026-10-04: psycopg → pg8000: pg8000 run()/execute() ALLOW multi-statements; only prepare() is safe. Never use run() for user SQL.
+- 2026-10-04: User wants one-file, no-admin distribution for macOS/Linux/Windows; native app embeds the one-file CLI for MCP.
+- 2026-10-04: Debian 11 images are EOL (repo 404) — use manylinux_2_28 for portable Linux builds.
