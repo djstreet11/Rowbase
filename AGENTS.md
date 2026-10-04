@@ -72,3 +72,6 @@ short: facts and rules only, no history.
 - 2026-10-04: User wants one-file, no-admin distribution for macOS/Linux/Windows; native app embeds the one-file CLI for MCP.
 - 2026-10-04: Debian 11 images are EOL (repo 404) — use manylinux_2_28 for portable Linux builds.
 - 2026-10-04: Nuitka one-file default unpacks to a fresh temp dir every run (~5 s on macOS) → cached tempdir spec makes it 0.1 s.
+- 2026-10-04: Rowbase MCP is registered in the user's Claude Code (user scope → dist/rowbase-macos-arm64 mcp). Terminal `claude` CLI is
+  NOT logged in and MCP servers load only at session start → verify by driving the exact command from ~/.claude.json as a JSON-RPC client.
+- 2026-10-04: User's real Rowbase connections (test, klium) are MySQL read-only and contain personal data — keep MCP read-only by default.
