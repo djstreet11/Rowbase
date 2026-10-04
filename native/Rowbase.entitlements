@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened runtime, not sandboxed: Rowbase shares ~/.config/rowbase with the CLI and spawns /usr/bin/ssh for tunnels.
+     Outgoing network and Keychain access need no entitlement outside the App Sandbox. -->
+<plist version="1.0">
+<dict/>
+</plist>
