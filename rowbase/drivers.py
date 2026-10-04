@@ -1,6 +1,6 @@
 """Database drivers: connect, transaction/timeout control and catalog SQL per dialect.
 
-Every driver executes exactly one statement per call (pymysql without MULTI_STATEMENTS, psycopg prepared,
+Every driver executes exactly one statement per call (pymysql without MULTI_STATEMENTS, pg8000 prepare(),
 sqlite3 refuses multiple) — the primary guarantee behind the read-only guard.
 Catalog methods return SQL; the engine runs it as trusted inside the same read-only transaction.
 """
@@ -96,29 +96,17 @@ class Postgres:
     name, dialect, port, q = "postgres", "postgres", 5432, '"'
 
     def connect(self, c, password, timeout):
-        import psycopg
-        kw = dict(user=c.get("user") or None, password=password or None, dbname=c.get("database") or None, connect_timeout=10,
-                  autocommit=False, application_name="rowbase")
-        host = c.get("socket") or c.get("host")
-        if host:
-            kw["host"] = host
-        if not c.get("socket"):
-            kw["port"] = int(c.get("port") or self.port)
-        if (c.get("options") or {}).get("sslmode"):
-            kw["sslmode"] = c["options"]["sslmode"]
-        return psycopg.connect(**{k: v for k, v in kw.items() if v is not None})
+        return _PGSession(c, password, self.port)
 
     def begin(self, db, read_only, timeout):
-        db.read_only = read_only  # psycopg opens the next transaction as BEGIN READ ONLY
+        db.execute("BEGIN READ ONLY" if read_only else "BEGIN")
         db.execute(f"SET LOCAL statement_timeout = {int(timeout) * 1000}")
 
     def run(self, db, sql):
-        cur = db.cursor()
-        cur.execute(sql.replace("%", "%%"), (), prepare=True)  # params + prepare => extended protocol, one statement only
-        return cur
+        return db.prepared(sql)
 
     def alive(self, db):
-        return not db.closed
+        return db.alive
 
     def ident(self, name):
         return ".".join('"' + p.replace('"', '""') + '"' for p in self._split(name))
@@ -178,6 +166,103 @@ class Postgres:
 
     def refby_sql(self, t):
         return self._fk("in", t)
+
+
+class _PGCursor:
+    """Minimal DB-API-like result used by the engine: description, rowcount, fetchmany/fetchone."""
+
+    def __init__(self, rows, columns, rowcount):
+        self.description = [(c["name"],) for c in columns] if columns else None
+        self.rowcount = rowcount
+        self._rows, self._i = rows or [], 0
+
+    def fetchmany(self, n):
+        out = self._rows[self._i:self._i + n]
+        self._i += len(out)
+        return out
+
+    def fetchone(self):
+        r = self.fetchmany(1)
+        return r[0] if r else None
+
+
+class _PGSession:
+    """pg8000 (pure Python, BSD) in autocommit mode with explicit BEGIN/COMMIT/ROLLBACK.
+
+    User SQL only goes through prepare(): a protocol-level Parse, which the server rejects for multiple statements —
+    pg8000's run()/execute() would happily run "SELECT 1; DELETE …" via the simple query protocol.
+    """
+
+    def __init__(self, c, password, default_port):
+        import pg8000.native
+        import ssl
+        kw = dict(user=c.get("user") or os.environ.get("USER") or "postgres", password=password or None,
+                  database=c.get("database") or None, timeout=60, application_name="rowbase")
+        if c.get("socket"):
+            sock = c["socket"]
+            kw["unix_sock"] = sock if not os.path.isdir(sock) else os.path.join(sock, f".s.PGSQL.{int(c.get('port') or default_port)}")
+        else:
+            kw.update(host=c.get("host") or "127.0.0.1", port=int(c.get("port") or default_port))
+        mode = (c.get("options") or {}).get("sslmode", "disable")
+        if mode in ("require", "prefer", "allow"):
+            ctx = ssl.create_default_context()
+            ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+            kw["ssl_context"] = ctx
+        elif mode in ("verify-ca", "verify-full"):
+            kw["ssl_context"] = True
+        self.conn = pg8000.native.Connection(**{k: v for k, v in kw.items() if v is not None})
+        self.alive = True
+
+    def execute(self, sql):  # internal control statements only (BEGIN/SET/COMMIT/ROLLBACK)
+        try:
+            self.conn.run(sql)
+        except Exception:
+            self.alive = self._ping()
+            raise
+
+    def prepared(self, sql):
+        try:
+            ps = self.conn.prepare(sql)
+            try:
+                rows = ps.run()
+                return _PGCursor(rows, ps.columns, getattr(ps._context, "row_count", -1))  # count lives on the run context
+            finally:
+                ps.close()
+        except Exception as e:
+            self.alive = self._ping()
+            raise RuntimeError(_pg_message(e)) from None
+
+    def _ping(self):
+        try:
+            self.conn.run("SELECT 1")
+            return True
+        except Exception:
+            try:
+                self.conn.run("ROLLBACK")
+                return True
+            except Exception:
+                return False
+
+    def commit(self):
+        self.execute("COMMIT")
+
+    def rollback(self):
+        self.execute("ROLLBACK")
+
+    def close(self):
+        self.alive = False
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+
+
+def _pg_message(e):
+    """pg8000 errors carry a dict of server fields; show the message (+ detail) like psql."""
+    a = e.args[0] if e.args else None
+    if isinstance(a, dict) and "M" in a:
+        return a["M"] + (f" — {a['D']}" if a.get("D") else "")
+    return str(e)
 
 
 class SQLite:

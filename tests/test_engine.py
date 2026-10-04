@@ -46,11 +46,13 @@ def recreate(driver, url):
     fields, pw = store.parse_url(url)
     fields.setdefault("user", _user())
     if driver == "postgres":
-        import psycopg
-        admin = psycopg.connect(host=fields.get("socket") or fields.get("host"), port=fields.get("port") or 5432, user=fields["user"],
-                                password=pw, dbname="postgres", autocommit=True, connect_timeout=3)
-        admin.execute("DROP DATABASE IF EXISTS rowbase_test")
-        admin.execute("CREATE DATABASE rowbase_test")
+        import pg8000.native
+        sock = fields.get("socket")
+        kw = {"unix_sock": os.path.join(sock, ".s.PGSQL.5432") if sock and os.path.isdir(sock) else sock} if sock else \
+            {"host": fields.get("host"), "port": fields.get("port") or 5432}
+        admin = pg8000.native.Connection(user=fields["user"], password=pw, database="postgres", timeout=3, **kw)
+        admin.run("DROP DATABASE IF EXISTS rowbase_test")
+        admin.run("CREATE DATABASE rowbase_test")
         admin.close()
     elif driver == "mysql":
         import pymysql
@@ -292,8 +294,8 @@ class SSHTunnelTest(unittest.TestCase):
         os.environ["ROWBASE_SSH"] = os.path.join(os.path.dirname(__file__), "fixtures", "fake_ssh.py")
         os.environ["FAKE_SSH_LOG"] = cls.log
         try:
-            import psycopg
-            psycopg.connect(host="127.0.0.1", dbname="postgres", connect_timeout=2).close()
+            import pg8000.native
+            pg8000.native.Connection(user=_user(), host="127.0.0.1", database="postgres", timeout=2).close()
         except Exception as e:
             raise unittest.SkipTest(f"Postgres TCP not available: {e}")
 
