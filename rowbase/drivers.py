@@ -5,6 +5,7 @@ sqlite3 refuses multiple) — the primary guarantee behind the read-only guard.
 Catalog methods return SQL; the engine runs it as trusted inside the same read-only transaction.
 """
 import os
+import re
 import time
 from urllib.request import pathname2url
 
@@ -27,6 +28,7 @@ class MySQL:
             kw.update(host=c.get("host") or "127.0.0.1", port=int(c.get("port") or self.port))
         db = pymysql.connect(**kw)
         db.rb_timeout = None
+        db.rb_mariadb = "mariadb" in (db.get_server_info() or "").lower()
         return db
 
     def begin(self, db, read_only, timeout):
@@ -41,7 +43,11 @@ class MySQL:
             db.rb_timeout = timeout
         cur.execute("START TRANSACTION READ ONLY" if read_only else "START TRANSACTION")
 
+    _EXPLAIN_ANALYZE = re.compile(r"^\s*EXPLAIN\s+ANALYZE\s+", re.I)
+
     def run(self, db, sql):
+        if getattr(db, "rb_mariadb", False):
+            sql = self._EXPLAIN_ANALYZE.sub("ANALYZE ", sql, count=1)  # MariaDB spells EXPLAIN ANALYZE as ANALYZE <stmt>
         cur = db.cursor()
         cur.execute(sql)
         return cur

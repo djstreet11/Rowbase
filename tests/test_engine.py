@@ -181,6 +181,10 @@ class PostgresTest(Base, unittest.TestCase):
 class MySQLTest(Base, unittest.TestCase):
     driver, orders = "mysql", "orders"
 
+    def test_explain_analyze(self):  # MySQL 8 syntax; rewritten to ANALYZE <stmt> on MariaDB
+        r = engine.execute(self.ro, "EXPLAIN ANALYZE SELECT * FROM orders WHERE id = 2")
+        self.assertTrue(r["rows"])
+
     @classmethod
     def setUpClass(cls):
         try:

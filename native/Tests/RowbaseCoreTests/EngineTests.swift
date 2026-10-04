@@ -135,6 +135,9 @@ enum Fixture {
             #expect(try await e.databases(ro).isEmpty)
         }
 
+        if d != .sqlite {  // MySQL 8 syntax; the MariaDB session rewrites it to ANALYZE <stmt>
+            #expect(!(try await e.execute(ro, "EXPLAIN ANALYZE SELECT * FROM \(qo) WHERE id = 2").rows.isEmpty))
+        }
         if d == .postgres {
             let n = try await e.execute(ro, "SELECT 7::numeric(10,2), -0.05::numeric(6,3), 12345678.9::numeric, 0::numeric, 'NaN'::numeric, 10000::numeric(8,1)")
             #expect(n.rows[0] == ["7.00", "-0.050", "12345678.9", "0", "NaN", "10000.0"])

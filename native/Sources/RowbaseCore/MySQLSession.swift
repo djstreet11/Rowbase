@@ -9,6 +9,7 @@ final class MySQLSession: DBSession, @unchecked Sendable {
     private let conn: MySQLConnection
     private var timeoutSet: Int?
     private var connectionID: String?
+    private var isMariaDB = false
     var cancelSQL: String? { connectionID.map { "KILL QUERY \($0)" } }
 
     init(_ c: Connection, password: String?) async throws {
@@ -28,6 +29,8 @@ final class MySQLSession: DBSession, @unchecked Sendable {
             throw RowbaseError("Connection error: \(Self.message(error))")
         }
         connectionID = try? await conn.simpleQuery("SELECT CONNECTION_ID()").get().first?.column("CONNECTION_ID()")?.string
+        let version = try? await conn.simpleQuery("SELECT VERSION()").get().first?.column("VERSION()")?.string
+        isMariaDB = version?.lowercased().contains("mariadb") ?? false
     }
 
     static func message(_ e: Error) -> String {
@@ -75,6 +78,10 @@ final class MySQLSession: DBSession, @unchecked Sendable {
             timeoutSet = timeout
         }
         try await exec(readOnly ? "START TRANSACTION READ ONLY" : "START TRANSACTION")
+        var sql = sql
+        if isMariaDB, let r = sql.range(of: #"^\s*EXPLAIN\s+ANALYZE\s+"#, options: [.regularExpression, .caseInsensitive]) {
+            sql.replaceSubrange(r, with: "ANALYZE ")  // MariaDB spells EXPLAIN ANALYZE as ANALYZE <stmt>
+        }
         do {
             let started = Date()
             let rows = try await exec(sql)
