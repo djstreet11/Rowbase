@@ -55,6 +55,13 @@ public struct ConnectionStore: Sendable {
         (c.host, c.socket, c.database, c.path, c.user) = (blank(c.host), blank(c.socket), blank(c.database), blank(c.path), blank(c.user))
         (c.env, c.color, c.group) = (blank(c.env), blank(c.color), blank(c.group))
         if c.options?.isEmpty == true { c.options = nil }
+        if var ssh = c.ssh {
+            (ssh.user, ssh.identityFile) = (blank(ssh.user), blank(ssh.identityFile))
+            ssh.host = ssh.host.trimmingCharacters(in: .whitespaces)
+            if c.dialect == .sqlite || (ssh.host.isEmpty && ssh.user == nil && ssh.port == nil && ssh.identityFile == nil) { c.ssh = nil }
+            else if ssh.host.isEmpty { throw RowbaseError("SSH tunnel needs a host.") }
+            else { c.ssh = ssh }
+        }
         var all = try load()
         if all.contains(where: { $0.name.lowercased() == c.name.lowercased() && $0.id != c.id }) {
             throw RowbaseError("A connection named '\(c.name)' already exists.")
@@ -135,11 +142,13 @@ enum Keychain {
 
 public enum ConnectionURL {
     /// mysql://u:p@host:3306/db, postgres://…?sslmode=require&socket=/tmp, sqlite:///abs/path.db → (fields, password)
-    public static func parse(_ s: String) -> (Connection, String?)? {
+    public static func parse(_ s: String) -> (Connection, String?)? { parse(s, allowSSH: false) }
+
+    static func parse(_ s: String, allowSSH: Bool) -> (Connection, String?)? {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let r = t.range(of: "://") else { return nil }
         let scheme = t[..<r.lowerBound].lowercased(), rest = String(t[r.upperBound...])
-        guard ["mysql", "mariadb", "postgres", "postgresql", "pg", "sqlite", "sqlite3"].contains(scheme) else { return nil }
+        guard ["mysql", "mariadb", "postgres", "postgresql", "pg", "sqlite", "sqlite3"].contains(scheme) || (allowSSH && scheme == "ssh") else { return nil }
         var c = Connection(driver: Dialect(driver: scheme).rawValue)
         let dec = { (x: Substring) in String(x).removingPercentEncoding ?? String(x) }
         if c.dialect == .sqlite {
@@ -169,6 +178,9 @@ public enum ConnectionURL {
                 opts[dec(p[0])] = p.count > 1 ? dec(p[1]) : ""
             }
             c.socket = opts.removeValue(forKey: "socket")
+            if let s = opts.removeValue(forKey: "ssh"), let (sc, _) = parse("ssh://" + s, allowSSH: true) {  // ?ssh=user@bastion:22
+                c.ssh = SSHConfig(host: sc.host ?? "", port: sc.port, user: sc.user)
+            }
             c.options = opts.isEmpty ? nil : opts
         }
         return (c, password)

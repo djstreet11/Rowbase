@@ -6,6 +6,15 @@ public protocol DBSession: AnyObject, Sendable {
     func run(_ sql: String, readOnly: Bool, timeout: Int, maxRows: Int) async throws -> QueryResult
     var isAlive: Bool { get }
     func close() async
+    /// Statement that cancels this session's running query when executed from ANOTHER session; nil → use interrupt().
+    var cancelSQL: String? { get }
+    /// In-process cancel (SQLite). Must be safe to call from any thread while `run` is executing.
+    func interrupt()
+}
+
+public extension DBSession {
+    var cancelSQL: String? { nil }
+    func interrupt() {}
 }
 
 /// Catalog SQL per dialect — same queries and column order as rowbase/drivers.py.

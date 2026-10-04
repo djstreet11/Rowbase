@@ -31,6 +31,8 @@ final class SQLiteSession: DBSession, @unchecked Sendable {
 
     var isAlive: Bool { db != nil }
 
+    func interrupt() { if let db { sqlite3_interrupt(db) } }  // thread-safe per SQLite docs
+
     func close() async {
         lock.withLock { sqlite3_close(db); db = nil }
     }

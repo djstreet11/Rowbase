@@ -256,3 +256,51 @@ class ServerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SSHTunnelTest(unittest.TestCase):
+    """Tunnel plumbing end-to-end with tests/fixtures/fake_ssh.py standing in for ssh (no sshd needed)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.log = os.path.join(TMP, "ssh.log")
+        os.environ["ROWBASE_SSH"] = os.path.join(os.path.dirname(__file__), "fixtures", "fake_ssh.py")
+        os.environ["FAKE_SSH_LOG"] = cls.log
+        try:
+            import psycopg
+            psycopg.connect(host="127.0.0.1", dbname="postgres", connect_timeout=2).close()
+        except Exception as e:
+            raise unittest.SkipTest(f"Postgres TCP not available: {e}")
+
+    @classmethod
+    def tearDownClass(cls):
+        from rowbase import tunnel
+        tunnel.close_all()
+        os.environ.pop("ROWBASE_SSH", None)
+
+    def test_query_through_tunnel(self):
+        c = store.upsert({"name": "via-ssh", "driver": "postgres", "host": "127.0.0.1", "port": 5432, "database": "postgres",
+                          "ssh": {"host": "bastion.example", "user": "deploy", "port": "2222", "identityFile": "~/.ssh/k"}})
+        self.assertEqual(c["ssh"], {"host": "bastion.example", "user": "deploy", "port": 2222, "identityFile": "~/.ssh/k"})
+        r = engine.execute(c["id"], "SELECT inet_server_port()")
+        self.assertEqual(r["rows"][0][0], 5432)
+        with open(self.log) as f:
+            argv = f.read()
+        self.assertIn("-p 2222", argv)
+        self.assertIn("deploy@bastion.example", argv)
+        self.assertIn(":127.0.0.1:5432", argv)
+        self.assertIn(os.path.expanduser("~/.ssh/k"), argv)
+        self.assertIn("BatchMode=yes", argv)
+
+    def test_tunnel_failure_is_reported(self):
+        c = store.upsert({"name": "bad-ssh", "driver": "postgres", "host": "db", "ssh": {"host": "fail.example"}})
+        with self.assertRaises(QueryError) as e:
+            engine.execute(c["id"], "SELECT 1")
+        self.assertIn("Could not resolve hostname", str(e.exception))
+
+    def test_url_and_validation(self):
+        f, _ = store.parse_url("mysql://u@db.internal/app?ssh=deploy@bastion:2222")
+        self.assertEqual(f["ssh"], {"host": "bastion", "port": 2222, "user": "deploy"})
+        with self.assertRaises(QueryError):
+            store.normalize({"name": "x", "driver": "mysql", "ssh": {"user": "a"}})
+        self.assertNotIn("ssh", store.normalize({"name": "x", "driver": "sqlite", "path": "/a", "ssh": {"host": "h"}}))

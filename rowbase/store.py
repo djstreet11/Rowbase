@@ -18,7 +18,7 @@ CONNECTIONS = os.path.join(HOME, "connections.json")
 SECRETS = os.path.join(HOME, "secrets.json")
 HISTORY = os.path.join(HOME, "history.jsonl")
 SERVICE = "rowbase"
-FIELDS = ("id", "name", "driver", "host", "port", "socket", "database", "path", "user", "readOnly", "env", "color", "group", "options")
+FIELDS = ("id", "name", "driver", "host", "port", "socket", "database", "path", "user", "readOnly", "env", "color", "group", "options", "ssh")
 ENVS = ("local", "dev", "stage", "prod")
 
 
@@ -71,6 +71,17 @@ def normalize(data):
         raise QueryError(f"env must be one of {', '.join(ENVS)}")
     if c["driver"] == "sqlite" and not (c.get("path") or c.get("database")):
         raise QueryError("SQLite connection needs a file path.")
+    if c.get("ssh"):
+        ssh = {k: v for k, v in c["ssh"].items() if k in ("host", "port", "user", "identityFile") and v not in (None, "")}
+        if c["driver"] == "sqlite":
+            ssh = {}
+        elif not ssh.get("host"):
+            raise QueryError("SSH tunnel needs a host.")
+        if ssh.get("port") is not None:
+            ssh["port"] = int(ssh["port"])
+        c["ssh"] = ssh or None
+        if not ssh:
+            del c["ssh"]
     return c
 
 
@@ -182,6 +193,9 @@ def parse_url(url):
     qs = {k: v[0] for k, v in parse_qs(u.query).items()}
     if "socket" in qs:
         c["socket"] = qs.pop("socket")
+    if "ssh" in qs:  # ?ssh=user@bastion:22
+        su = urlparse("ssh://" + qs.pop("ssh"))
+        c["ssh"] = {k: v for k, v in {"host": su.hostname, "port": su.port, "user": su.username}.items() if v}
     if qs:
         c["options"] = qs
     return {k: v for k, v in c.items() if v is not None}, (unquote(u.password) if u.password is not None else None)

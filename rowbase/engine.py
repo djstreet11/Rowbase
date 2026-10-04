@@ -11,7 +11,7 @@ import threading
 import time
 import uuid as uuidlib
 
-from . import drivers, store
+from . import drivers, store, tunnel
 from .guard import QueryError, analyze, guard
 
 FETCH_CAP = 50_000  # rows kept for statements that already carry their own LIMIT (or SHOW/EXPLAIN/…)
@@ -114,6 +114,10 @@ def resolve(conn):
 
 def _open(c, pw, timeout):
     drv = drivers.get(c["driver"])
+    if c.get("ssh") and drv.name != "sqlite":
+        # connect through a local forward; the driver sees plain 127.0.0.1:<port>
+        port = tunnel.open_tunnel(c["ssh"], tunnel.target_of(c, drv.port))
+        c = {**{k: v for k, v in c.items() if k not in ("socket", "ssh")}, "host": "127.0.0.1", "port": port}
     try:
         return drv.connect(c, pw if pw is not None else store.password(c), timeout)
     except Exception as e:

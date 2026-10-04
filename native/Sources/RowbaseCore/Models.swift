@@ -16,13 +16,14 @@ public struct Connection: Codable, Identifiable, Hashable, Sendable {
     public var color: String?
     public var group: String?
     public var options: [String: String]?
+    public var ssh: SSHConfig?
 
     public init(id: String = UUID().uuidString.lowercased(), name: String = "", driver: String = "mysql", host: String? = nil,
                 port: Int? = nil, socket: String? = nil, database: String? = nil, path: String? = nil, user: String? = nil,
-                readOnly: Bool = true, env: String? = nil, color: String? = nil, group: String? = nil, options: [String: String]? = nil) {
+                readOnly: Bool = true, env: String? = nil, color: String? = nil, group: String? = nil, options: [String: String]? = nil, ssh: SSHConfig? = nil) {
         (self.id, self.name, self.driver, self.host, self.port, self.socket, self.database, self.path, self.user) =
             (id, name, driver, host, port, socket, database, path, user)
-        (self.readOnly, self.env, self.color, self.group, self.options) = (readOnly, env, color, group, options)
+        (self.readOnly, self.env, self.color, self.group, self.options, self.ssh) = (readOnly, env, color, group, options, ssh)
     }
 
     public init(from decoder: Decoder) throws {
@@ -41,6 +42,7 @@ public struct Connection: Codable, Identifiable, Hashable, Sendable {
         color = try c.decodeIfPresent(String.self, forKey: .color)
         group = try c.decodeIfPresent(String.self, forKey: .group)
         options = try c.decodeIfPresent([String: String].self, forKey: .options)
+        ssh = try c.decodeIfPresent(SSHConfig.self, forKey: .ssh)
     }
 
     public var dialect: Dialect { Dialect(driver: driver) }
@@ -51,6 +53,20 @@ public struct Connection: Codable, Identifiable, Hashable, Sendable {
         let at = socket ?? host ?? "localhost"
         return "\(user.map { "\($0)@" } ?? "")\(at)\(port.map { ":\($0)" } ?? "")/\(database ?? "")"
     }
+}
+
+/// SSH tunnel through the system `ssh` (key/agent auth, ~/.ssh/config honoured). Shared contract with Python.
+public struct SSHConfig: Codable, Hashable, Sendable {
+    public var host: String
+    public var port: Int?
+    public var user: String?
+    public var identityFile: String?
+
+    public init(host: String, port: Int? = nil, user: String? = nil, identityFile: String? = nil) {
+        (self.host, self.port, self.user, self.identityFile) = (host, port, user, identityFile)
+    }
+
+    public var label: String { "\(user.map { "\($0)@" } ?? "")\(host)\(port.map { ":\($0)" } ?? "")" }
 }
 
 public enum Dialect: String, Sendable, CaseIterable {

@@ -124,12 +124,49 @@ enum Fixture {
             #expect(n.rows[0] == ["7.00", "-0.050", "12345678.9", "0", "NaN", "10000.0"])
             let p = try await e.execute(ro, "SELECT meta, u, d, at FROM \(qo) WHERE id = 1")
             #expect(p.rows[0][0] == #"{"a": 1}"# && p.rows[0][1] == "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" && p.rows[0][2] == "2026-10-04")
-            #expect(p.rows[0][3]?.contains("T") == true)
+            #expect(p.rows[0][3]?.range(of: #"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d+)?[+-]\d\d"#, options: .regularExpression) != nil, "\(p.rows[0][3] ?? "")")
+            let t = try await e.execute(ro, "SELECT '2026-10-04 01:02:03.5'::timestamp, '2000-01-01'::timestamp, '1999-12-31 23:59:59.25'::timestamp, '13:05:00.000123'::time, '1 year 2 mons 3 days 04:05:06'::interval, '-00:00:01.5'::interval, '1969-07-20'::date, 'infinity'::timestamp")
+            #expect(t.rows[0] == ["2026-10-04 01:02:03.5", "2000-01-01 00:00:00", "1999-12-31 23:59:59.25", "13:05:00.000123",
+                                  "1 year 2 mons 3 days 04:05:06", "-00:00:01.5", "1969-07-20", "infinity"])
             await #expect(throws: RowbaseError.self) {
                 try await e.execute(ro, "SELECT count(*) FROM generate_series(1, 200000000)", timeout: 1, trusted: true)
             }
             await #expect(throws: RowbaseError.self) { try await e.execute(ro, "WITH x AS (DELETE FROM \(qo) RETURNING *) SELECT * FROM x") }
         }
+        // cancel a long statement from another task
+        let slow = switch d {
+        case .postgres: "SELECT pg_sleep(20)"
+        case .mysql: "SELECT SLEEP(20)"
+        case .sqlite: "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n"
+        }
+        let id = UUID(), started = Date()
+        let task = Task { try await e.execute(ro, slow, timeout: 30, trusted: true, runID: id) }
+        try await Task.sleep(for: .milliseconds(700))
+        await e.cancel(id)
+        do { _ = try await task.value; Issue.record("\(d): cancelled query returned normally") }
+        catch let err as RowbaseError { #expect(err.message == "Query cancelled.", "\(d): \(err.message)") }
+        #expect(Date().timeIntervalSince(started) < 5, "\(d): cancel took too long")
+        #expect(try await e.execute(ro, "SELECT 1").rows[0][0] == "1")  // session still usable
+        await e.reset()
+    }
+
+    @Test func sshTunnel() async throws {
+        let fake = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../tests/fixtures/fake_ssh.py").standardizedFileURL.path
+        let log = Fixture.home.appendingPathComponent("ssh.log").path
+        setenv("ROWBASE_SSH", fake, 1); setenv("FAKE_SSH_LOG", log, 1)
+        defer { unsetenv("ROWBASE_SSH"); TunnelManager.shutdown() }
+        guard TunnelManager.canConnect(5432) else { print("skip ssh: no Postgres on TCP 5432"); return }
+        let c = try Fixture.store.upsert(Connection(name: "via-ssh", driver: "postgres", host: "127.0.0.1", port: 5432, database: "postgres",
+                                                    ssh: SSHConfig(host: "bastion.example", port: 2222, user: "deploy")))
+        let e = Engine(store: Fixture.store)
+        #expect(try await e.execute(c, "SELECT inet_server_port()").rows[0][0] == "5432")
+        let argv = try String(contentsOfFile: log, encoding: .utf8)
+        #expect(argv.contains("-p 2222") && argv.contains("deploy@bastion.example") && argv.contains(":127.0.0.1:5432") && argv.contains("BatchMode=yes"))
+        let bad = Connection(name: "bad", driver: "postgres", host: "db", ssh: SSHConfig(host: "fail.example"))
+        await #expect(throws: RowbaseError.self) { try await e.execute(bad, "SELECT 1") }
+        #expect(ConnectionURL.parse("mysql://u@db/app?ssh=deploy@bastion:2222")?.0.ssh == SSHConfig(host: "bastion", port: 2222, user: "deploy"))
+        #expect(ConnectionURL.parse("ssh://x@y") == nil)
         await e.reset()
     }
 }

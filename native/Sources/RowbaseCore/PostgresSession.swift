@@ -7,6 +7,8 @@ import PostgresNIO
 /// read-only = BEGIN READ ONLY + SET LOCAL statement_timeout, always rolled back.
 final class PostgresSession: DBSession, @unchecked Sendable {
     private let conn: PostgresConnection
+    private var pid: String?
+    var cancelSQL: String? { pid.map { "SELECT pg_cancel_backend(\($0))" } }
     private static let logger = Logger(label: "rowbase.postgres")
     private static let ids = ManagedAtomicCounter()
 
@@ -37,6 +39,9 @@ final class PostgresSession: DBSession, @unchecked Sendable {
             conn = try await PostgresConnection.connect(configuration: cfg, id: Self.ids.next(), logger: Self.logger)
         } catch {
             throw RowbaseError("Connection error: \(Self.message(error))")
+        }
+        if let r = try? await conn.query("SELECT pg_backend_pid()", []).get(), let row = r.rows.first {
+            pid = PGFormat.cell(row.makeRandomAccess()[0])
         }
     }
 
@@ -100,11 +105,48 @@ extension FileManager {
 
 /// Binary-format Postgres values → display strings for the common types; unknown types fall back to text/hex.
 enum PGFormat {
-    nonisolated(unsafe) static let iso: ISO8601DateFormatter = {  // formatting only; thread-safe per Apple docs
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+
+    /// psql-like rendering: "2026-10-03 22:44:24.577+03" (timestamptz in local zone), exact microseconds.
+    static func timestamp(_ usSince2000: Int64, local: Bool) -> String {
+        if usSince2000 == .max { return "infinity" }
+        if usSince2000 == .min { return "-infinity" }
+        var secs = usSince2000.quotientAndRemainder(dividingBy: 1_000_000)
+        if secs.remainder < 0 { secs = (secs.quotient - 1, secs.remainder + 1_000_000) }
+        let date = Date(timeIntervalSince1970: Double(secs.quotient) + 946_684_800)
+        var cal = Calendar(identifier: .gregorian)
+        let tz = local ? TimeZone.current : TimeZone(identifier: "UTC")!
+        cal.timeZone = tz
+        let d = cal.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        var out = String(format: "%04d-%02d-%02d %02d:%02d:%02d", d.year!, d.month!, d.day!, d.hour!, d.minute!, d.second!)
+        out += fraction(secs.remainder)
+        if local {
+            let off = tz.secondsFromGMT(for: date), a = abs(off)
+            out += (off < 0 ? "-" : "+") + String(format: "%02d", a / 3600) + (a % 3600 == 0 ? "" : String(format: ":%02d", a % 3600 / 60))
+        }
+        return out
+    }
+
+    static func fraction(_ us: Int64) -> String {
+        guard us != 0 else { return "" }
+        var f = String(format: "%06lld", us)
+        while f.hasSuffix("0") { f.removeLast() }
+        return "." + f
+    }
+
+    static func clock(_ us: Int64) -> String {
+        let (s, frac) = us.quotientAndRemainder(dividingBy: 1_000_000)
+        return String(format: "%02lld:%02lld:%02lld", s / 3600, s % 3600 / 60, s % 60) + fraction(frac)
+    }
+
+    static func interval(_ us: Int64, days: Int32, months: Int32) -> String {
+        var parts: [String] = []
+        let (y, m) = (months / 12, months % 12)
+        if y != 0 { parts.append("\(y) year\(abs(y) == 1 ? "" : "s")") }
+        if m != 0 { parts.append("\(m) mon\(abs(m) == 1 ? "" : "s")") }
+        if days != 0 { parts.append("\(days) day\(abs(days) == 1 ? "" : "s")") }
+        if us != 0 || parts.isEmpty { parts.append((us < 0 ? "-" : "") + clock(abs(us))) }
+        return parts.joined(separator: " ")
+    }
 
     /// Binary NUMERIC: ndigits, weight, sign, dscale (int16 each) + base-10000 digits. Honors dscale (7.00, not 7).
     static func numeric(_ buf: inout ByteBuffer) -> String? {
@@ -147,12 +189,16 @@ enum PGFormat {
         case .float8: return (try? c.decode(Double.self)).map { "\($0)" }
         case .numeric: return numeric(&buf)
         case .uuid: return (try? c.decode(UUID.self)).map { $0.uuidString.lowercased() }
-        case .timestamptz: return (try? c.decode(Date.self)).map { iso.string(from: $0) }
-        case .timestamp: return (try? c.decode(Date.self)).map { iso.string(from: $0).replacingOccurrences(of: "Z", with: "") }
+        case .timestamptz: return buf.readInteger(as: Int64.self).map { timestamp($0, local: true) }
+        case .timestamp: return buf.readInteger(as: Int64.self).map { timestamp($0, local: false) }
+        case .time: return buf.readInteger(as: Int64.self).map { clock($0) }
+        case .interval:
+            guard let us = buf.readInteger(as: Int64.self), let days = buf.readInteger(as: Int32.self),
+                  let months = buf.readInteger(as: Int32.self) else { return nil }
+            return interval(us, days: days, months: months)
         case .date:
             guard let days = buf.readInteger(as: Int32.self) else { return nil }
-            let d = Date(timeIntervalSince1970: (Double(days) + 10957) * 86400)
-            return String(iso.string(from: d).prefix(10))
+            return String(timestamp(Int64(days) * 86_400_000_000, local: false).prefix(10))
         case .jsonb:
             _ = buf.readInteger(as: UInt8.self)  // version byte
             return buf.readString(length: buf.readableBytes)

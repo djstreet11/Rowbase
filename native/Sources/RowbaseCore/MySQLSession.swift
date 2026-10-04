@@ -8,6 +8,8 @@ import NIOSSL
 final class MySQLSession: DBSession, @unchecked Sendable {
     private let conn: MySQLConnection
     private var timeoutSet: Int?
+    private var connectionID: String?
+    var cancelSQL: String? { connectionID.map { "KILL QUERY \($0)" } }
 
     init(_ c: Connection, password: String?) async throws {
         let el = MultiThreadedEventLoopGroup.singleton.next()
@@ -25,6 +27,7 @@ final class MySQLSession: DBSession, @unchecked Sendable {
         } catch {
             throw RowbaseError("Connection error: \(Self.message(error))")
         }
+        connectionID = try? await conn.simpleQuery("SELECT CONNECTION_ID()").get().first?.column("CONNECTION_ID()")?.string
     }
 
     static func message(_ e: Error) -> String {
