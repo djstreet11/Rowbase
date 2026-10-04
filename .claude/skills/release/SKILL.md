@@ -41,3 +41,11 @@ See docs/RELEASING.md for the full guide. Key facts:
 - mcp-registry.yml runs after a successful Release (workflow_run), on server.json changes on main, or manually; skips if the
   version isn't on PyPI yet or is already registered. Registry limits: description ≤ 100 chars (v0.2.1 failed on that) —
   check locally first: download mcp-publisher (official registry releases) → `mcp-publisher validate`.
+
+## Release notes for the user (MANDATORY after every release)
+The workflow publishes auto-generated notes; the user pastes a proper text himself. After the release run is green, reply with:
+- `git log --oneline v<prev>..v<new>` → group into Highlights / Fixes (user-facing wording, no internals);
+- downloads table (DMG, macos-arm64, linux-x64/arm64, windows-x64.exe);
+- install lines: `pipx install rowbase-db`, `claude mcp add rowbase -- uvx --from rowbase-db rowbase mcp`;
+- the "not code-signed yet" note (until Developer ID / Windows signing exist).
+Tell the user: Releases → the version → Edit → replace the text → Update release.

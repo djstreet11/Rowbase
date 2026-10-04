@@ -28,6 +28,7 @@ Linux/Windows — far future.
 - **Style**: match surrounding code — compact, dense, small helpers, comments only for non-obvious "why".
 - **Tests**: run the suite after backend changes; keep it green. Fixture DB `rowbase_test` is dropped/recreated by tests.
 - **Git**: branch `main`, remote `origin` = github.com/djstreet11/Rowbase (public). Commit logical units; message body + `Co-Authored-By` trailer. Don't push unless asked.
+- **Releases**: after every release give the user ready-to-paste GitHub release notes (English markdown) — see `release` skill.
 - **Token economy**: work in English; delegate to a Sonnet subagent only when (subagent + review) is cheaper than inline
   (worked well for: large mechanical frontend rewrite against a fixed API contract).
 
