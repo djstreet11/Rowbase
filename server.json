@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.djstreet11/rowbase",
+  "title": "Rowbase",
+  "description": "Read-only-by-default MySQL/MariaDB, PostgreSQL and SQLite access for AI agents: schema, search, sample, query, explain. TOON output.",
+  "repository": {
+    "url": "https://github.com/djstreet11/Rowbase",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/djstreet11/Rowbase",
+  "version": "0.2.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "rowbase-db",
+      "version": "0.2.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

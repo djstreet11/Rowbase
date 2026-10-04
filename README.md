@@ -1,18 +1,19 @@
 <p align="center">
-  <img src="native/Resources/AppIcon-1024.png" width="120" alt="Rowbase icon">
+  <img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/native/Resources/AppIcon-1024.png" width="120" alt="Rowbase icon">
 </p>
 <h1 align="center">Rowbase</h1>
+<!-- mcp-name: io.github.djstreet11/rowbase -->
 <p align="center"><b>A fast, good-looking, read-only-by-default database client — for humans and for AI agents.</b><br>
 MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for macOS, Linux &amp; Windows · built-in MCP server</p>
 
 <p align="center">
   <a href="https://github.com/djstreet11/Rowbase/releases/latest"><img src="https://img.shields.io/github/v/release/djstreet11/Rowbase?label=download" alt="Latest release"></a>
   <a href="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml"><img src="https://github.com/djstreet11/Rowbase/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/djstreet11/Rowbase/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/MCP-server-8A2BE2" alt="MCP server">
 </p>
 
-<p align="center"><img src="docs/assets/table-inspector.png" width="860" alt="Rowbase: table browser with row inspector"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/table-inspector.png" width="860" alt="Rowbase: table browser with row inspector"></p>
 
 ## Why Rowbase?
 - **Safe by default.** Every connection is read-only until you say otherwise — enforced at four independent layers
@@ -28,7 +29,7 @@ MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for 
 
 | | |
 |---|---|
-| <img src="docs/assets/sql-editor.png" alt="SQL editor with autocomplete and results"> | <img src="docs/assets/editing.png" alt="Inline editing with pending changes"> |
+| <img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/sql-editor.png" alt="SQL editor with autocomplete and results"> | <img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/editing.png" alt="Inline editing with pending changes"> |
 | SQL editor: autocomplete, ⌘↩ runs the statement under the caret, EXPLAIN, cancel | Edit rows safely: pending changes, SQL preview, one atomic save |
 
 ## Download
@@ -58,9 +59,10 @@ rows[2]{id,customer,total}:
 truncated: false
 ```
 Tools: `guide`, `connections`, `databases`, `tables`, `describe`, `search_schema`, `sample`, `count`, `query`, `explain`
-(+ `apply_changes` only when you allow writes). Details: [docs/MCP.md](docs/MCP.md).
+(+ `apply_changes` only when you allow writes). Details: [docs/MCP.md](https://github.com/djstreet11/Rowbase/blob/main/docs/MCP.md).
 
 ## CLI
+Install from PyPI (`pipx install rowbase-db` / `uv tool install rowbase-db`) or use a one-file download.
 ```bash
 rowbase add shop 'postgres://me@db.example.com/shop?ssh=deploy@bastion'   # read-only unless --rw
 rowbase tables -c shop
@@ -70,16 +72,16 @@ rowbase mcp       # MCP server (stdio)
 rowbase doctor    # environment report
 ```
 
-<details><summary>Dark mode</summary><img src="docs/assets/dark.png" alt="Dark mode"></details>
+<details><summary>Dark mode</summary><img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/dark.png" alt="Dark mode"></details>
 
 ## Build from source
 - Python track: `python3 -m venv .venv && .venv/bin/pip install -e . && .venv/bin/rowbase ui`
-- One-file binaries: [docs/BUILDING.md](docs/BUILDING.md) · Native macOS app: `cd native && swift build` · releases: [docs/RELEASING.md](docs/RELEASING.md)
-- Architecture & roadmap: [SPEC.md](SPEC.md)
+- One-file binaries: [docs/BUILDING.md](https://github.com/djstreet11/Rowbase/blob/main/docs/BUILDING.md) · Native macOS app: `cd native && swift build` · releases: [docs/RELEASING.md](https://github.com/djstreet11/Rowbase/blob/main/docs/RELEASING.md)
+- Architecture & roadmap: [SPEC.md](https://github.com/djstreet11/Rowbase/blob/main/SPEC.md)
 
 ## Contributing
-Issues, ideas and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[Code of Conduct](CODE_OF_CONDUCT.md). If Rowbase is useful to you, a ⭐ helps others find it.
+Issues, ideas and pull requests are welcome — see [CONTRIBUTING.md](https://github.com/djstreet11/Rowbase/blob/main/CONTRIBUTING.md) and the
+[Code of Conduct](https://github.com/djstreet11/Rowbase/blob/main/CODE_OF_CONDUCT.md). If Rowbase is useful to you, a ⭐ helps others find it.
 
 ## License
-[Apache-2.0](LICENSE) — see [NOTICE](NOTICE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+[Apache-2.0](https://github.com/djstreet11/Rowbase/blob/main/LICENSE) — see [NOTICE](https://github.com/djstreet11/Rowbase/blob/main/NOTICE) and [THIRD_PARTY_LICENSES.md](https://github.com/djstreet11/Rowbase/blob/main/THIRD_PARTY_LICENSES.md).

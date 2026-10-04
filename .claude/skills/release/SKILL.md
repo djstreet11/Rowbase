@@ -26,8 +26,15 @@ See docs/RELEASING.md for the full guide. Key facts:
   ASCII stdio/argv in C locale → cli._utf8_stdio + surrogate argv repair; keyring needs `--include-distribution-metadata=keyring`.
 
 ## GitHub release (verified 2026-10-04, v0.2.0)
-- Bump `rowbase/__init__.py`, `pyproject.toml` and `native/VERSION` together → commit → `git tag -a vX.Y.Z` → push main + tag.
+- Bump `rowbase/__init__.py`, `pyproject.toml`, `native/VERSION` and BOTH versions in `server.json` together → commit →
+  `git tag -a vX.Y.Z` → push main + tag. The `pypi` job fails if pyproject version ≠ tag.
 - .github/workflows/release.yml builds Linux x64/arm64, Windows x64 (doctor runs on the runner), macOS arm64 one-files + DMG
   (embeds the CLI) and publishes them to https://github.com/djstreet11/Rowbase/releases (~20–30 min).
 - Watch by run id: `curl -s https://api.github.com/repos/djstreet11/Rowbase/actions/runs/<id>` (match the run id, not a text pattern
   across several runs — a pattern once matched another run's "completed").
+
+## PyPI + MCP Registry (release.yml jobs `pypi`, `mcp-registry`)
+- PyPI project `rowbase-db` via Trusted Publishing (OIDC, no tokens): publisher = djstreet11/Rowbase, workflow release.yml, environment pypi.
+- MCP Registry name `io.github.djstreet11/rowbase`; ownership = GitHub OIDC + `<!-- mcp-name: io.github.djstreet11/rowbase -->` in README
+  (it becomes the PyPI description). server.json schema 2025-12-11; `mcp-publisher validate` runs before publish.
+- A version can never be re-uploaded to PyPI → bump the patch version for every published fix.

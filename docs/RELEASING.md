@@ -24,8 +24,9 @@ Ad-hoc builds run on this Mac. On other Macs Gatekeeper blocks them (right-click
    submits it to Apple's notary service, waits, staples the ticket and runs `spctl --assess`.
 
 ## Versioning
-- `native/VERSION` = marketing version (CFBundleShortVersionString); build number = `git rev-list --count HEAD`.
-- Bump VERSION, commit, tag `vX.Y.Z`, run the release.
+- One version everywhere: `rowbase/__init__.py`, `pyproject.toml`, `native/VERSION`, `server.json` (twice).
+  Build number of the app = `git rev-list --count HEAD`.
+- Bump, commit, tag `vX.Y.Z`, push the tag → GitHub release (binaries + DMG), PyPI `rowbase-db`, MCP Registry.
 
 ## Assets
 - App icon is code: `swift native/scripts/make-icon.swift` (from `native/`) regenerates `Resources/AppIcon.icns` + `AppIcon-1024.png`.
