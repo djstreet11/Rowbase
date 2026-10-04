@@ -32,7 +32,10 @@ def run_sql(args, sql):
         note = f"-- {res['affected']} row(s) affected, {res['elapsed']:.2f}s, conn={c['name']}"
     if res["truncated"]:
         note += f", TRUNCATED at --limit {args.limit} (add WHERE/ORDER BY or raise --limit)"
-    _out(args, res["cols"], res["rows"], note)
+    if res["cols"]:
+        _out(args, res["cols"], res["rows"], note)
+    else:
+        print(note, file=sys.stderr)  # DDL/DML: no result table
 
 
 def cmd_conns(args):
