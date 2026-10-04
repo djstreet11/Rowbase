@@ -94,6 +94,17 @@ def cmd_q(args):
     run_sql(args, sql)
 
 
+def cmd_mcp(args):
+    from . import mcp
+    if args.print_config:
+        cfg = mcp.client_config()
+        for k in ("claude_code", "claude_desktop", "cursor", "codex", "vscode"):
+            print(f"# {k}\n{cfg[k]}\n")
+        print("# prompt to paste into your assistant\n" + cfg["prompt"])
+        return
+    mcp.serve()
+
+
 def cmd_ui(args):
     from . import server
     server.serve(args.port, not args.no_open)
@@ -109,7 +120,7 @@ def main(argv=None):
     common.add_argument("--width", type=int, default=60, help="max cell width in table format")
     common.add_argument("--timeout", type=int, default=30, help="statement timeout, seconds")
     common.add_argument("--out", help="write the full result to a file (.json -> JSON)")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
     sub.add_parser("conns", help="list saved connections").set_defaults(fn=cmd_conns)
     s = sub.add_parser("add", help="save a connection from a URL")
     s.add_argument("name"); s.add_argument("url")
@@ -127,8 +138,14 @@ def main(argv=None):
     s.set_defaults(fn=cmd_desc)
     s = sub.add_parser("q", parents=[common], help="run one statement")
     s.add_argument("sql", nargs="?"); s.add_argument("-f", "--file"); s.set_defaults(fn=cmd_q)
+    s = sub.add_parser("mcp", help="run the MCP server on stdio (for AI assistants)")
+    s.add_argument("--print-config", action="store_true", help="print client setup snippets and the setup prompt")
+    s.set_defaults(fn=cmd_mcp)
     s = sub.add_parser("ui", help="start the local web UI")
     s.add_argument("--port", type=int, default=8765); s.add_argument("--no-open", action="store_true"); s.set_defaults(fn=cmd_ui)
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv:  # double-clicked one-file binary: open the web UI
+        argv = ["ui"]
     args = p.parse_args(argv)
     try:
         args.fn(args)

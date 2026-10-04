@@ -1,0 +1,83 @@
+{
+ "_doc": "TOON encoder conformance (rowbase/toon.py; native port must match).",
+ "cases": [
+  {
+   "name": "table",
+   "kind": "table",
+   "columns": [
+    "id",
+    "name",
+    "note",
+    "total"
+   ],
+   "rows": [
+    [
+     1,
+     "ann",
+     "it's",
+     "9.50"
+    ],
+    [
+     2,
+     "Smith, Bob",
+     null,
+     "-3"
+    ],
+    [
+     3,
+     "  pad",
+     "a:b",
+     "007"
+    ],
+    [
+     4,
+     "",
+     "true",
+     "1e5"
+    ],
+    [
+     5,
+     "line\nbreak",
+     "say \"hi\"",
+     "-x"
+    ],
+    [
+     6,
+     "#tag",
+     "[x]",
+     2.5
+    ]
+   ],
+   "expected": "table[6]{id,name,note,total}:\n  1,ann,it's,9.50\n  2,\"Smith, Bob\",null,-3\n  3,\"  pad\",\"a:b\",\"007\"\n  4,\"\",\"true\",\"1e5\"\n  5,\"line\\nbreak\",\"say \\\"hi\\\"\",\"-x\"\n  6,\"#tag\",\"[x]\",2.5"
+  },
+  {
+   "name": "empty",
+   "kind": "table",
+   "columns": [
+    "a"
+   ],
+   "rows": [],
+   "expected": "empty[0]{a}:"
+  },
+  {
+   "name": "object",
+   "kind": "encode",
+   "value": {
+    "table": "orders",
+    "rows": 3,
+    "truncated": false,
+    "ms": 1.5,
+    "list": [
+     "a",
+     "b c",
+     "1"
+    ],
+    "nested": {
+     "x": null
+    },
+    "empty": []
+   },
+   "expected": "table: orders\nrows: 3\ntruncated: false\nms: 1.5\nlist[3]: a,b c,1\nnested:\n  x: null\nempty[0]:"
+  }
+ ]
+}

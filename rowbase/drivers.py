@@ -64,6 +64,11 @@ class MySQL:
     def version_sql(self):
         return "SELECT VERSION()"
 
+    def search_sql(self, like):
+        return ("SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                f"AND (TABLE_NAME LIKE {self.lit(like)} OR COLUMN_NAME LIKE {self.lit(like)} OR COLUMN_COMMENT LIKE {self.lit(like)}) "
+                "ORDER BY TABLE_NAME, ORDINAL_POSITION")
+
     def databases_sql(self):
         return "SHOW DATABASES"
 
@@ -124,6 +129,12 @@ class Postgres:
 
     def version_sql(self):
         return "SELECT version()"
+
+    def search_sql(self, like):
+        name = "CASE WHEN table_schema = 'public' THEN table_name ELSE table_schema || '.' || table_name END"
+        return (f"SELECT {name}, column_name, data_type FROM information_schema.columns "
+                "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') "
+                f"AND (table_name ILIKE {lit(like)} OR column_name ILIKE {lit(like)}) ORDER BY 1, ordinal_position")
 
     def databases_sql(self):
         return "SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY 1"
@@ -301,6 +312,10 @@ class SQLite:
 
     def version_sql(self):
         return "SELECT 'SQLite ' || sqlite_version()"
+
+    def search_sql(self, like):
+        return ("SELECT m.name, p.name, p.type FROM sqlite_master m, pragma_table_info(m.name) p WHERE m.type IN ('table', 'view') "
+                f"AND (m.name LIKE {lit(like)} OR p.name LIKE {lit(like)}) ORDER BY m.name, p.cid")
 
     def databases_sql(self):
         return None  # one file = one database

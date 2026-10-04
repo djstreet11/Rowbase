@@ -17,6 +17,8 @@ HOME = os.path.expanduser(os.environ.get("ROWBASE_HOME", "~/.config/rowbase"))
 CONNECTIONS = os.path.join(HOME, "connections.json")
 SECRETS = os.path.join(HOME, "secrets.json")
 HISTORY = os.path.join(HOME, "history.jsonl")
+SETTINGS = os.path.join(HOME, "settings.json")
+MCP_DEFAULTS = {"allowWrites": False, "connections": "*", "maxRows": 200, "format": "toon", "timeout": 30, "toolset": "full"}
 SERVICE = "rowbase"
 FIELDS = ("id", "name", "driver", "host", "port", "socket", "database", "path", "user", "readOnly", "env", "color", "group", "options", "ssh")
 ENVS = ("local", "dev", "stage", "prod")
@@ -204,3 +206,36 @@ def parse_url(url):
 def public(c):
     """Connection as shown to clients (never includes secrets)."""
     return {k: c[k] for k in FIELDS if k in c}
+
+
+# ---------------------------------------------------------------- app settings (shared by CLI, web UI, native app)
+
+def settings():
+    try:
+        with open(SETTINGS, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = {}
+    data["mcp"] = {**MCP_DEFAULTS, **(data.get("mcp") or {})}
+    return data
+
+
+def save_settings(data):
+    cur = settings()
+    mcp = {**cur["mcp"], **((data or {}).get("mcp") or {})}
+    if mcp["format"] not in ("toon", "csv", "json", "md"):
+        raise QueryError("mcp.format must be toon, csv, json or md")
+    if mcp["toolset"] not in ("full", "minimal"):
+        raise QueryError("mcp.toolset must be full or minimal")
+    mcp["maxRows"] = max(1, min(int(mcp["maxRows"]), 5000))
+    mcp["timeout"] = max(1, min(int(mcp["timeout"]), 600))
+    mcp["allowWrites"] = bool(mcp["allowWrites"])
+    if mcp["connections"] != "*" and not isinstance(mcp["connections"], list):
+        raise QueryError('mcp.connections must be "*" or a list of connection names/ids')
+    cur["mcp"] = mcp
+    _ensure_home()
+    tmp = SETTINGS + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cur, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, SETTINGS)
+    return cur
