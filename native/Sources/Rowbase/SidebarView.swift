@@ -22,8 +22,8 @@ struct SidebarView: View {
             }
             .padding(8)
         }
-        // snapshots (cacheDisplay) cannot capture vibrancy/glass → opaque background so content is verifiable
-        .background(isSnapshot ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(.regularMaterial))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: state.filterFocusTick) { filterFocused = true }
     }
 
@@ -60,12 +60,8 @@ struct SidebarView: View {
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden)
 
-            if let c = state.selectedConnection {
-                if c.readOnly {
-                    Label("Read-only", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Label("READ-WRITE", systemImage: "pencil").font(.caption.weight(.bold)).foregroundStyle(.red)
-                }
+            if let c = state.selectedConnection, !c.readOnly {
+                Label("READ-WRITE", systemImage: "pencil").font(.caption.weight(.bold)).foregroundStyle(.red)
             }
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)

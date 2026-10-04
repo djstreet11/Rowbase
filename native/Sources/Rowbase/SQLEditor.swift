@@ -42,15 +42,65 @@ enum SQLHighlighter {
     }
 }
 
+final class SQLTextView: NSTextView {
+    var completer: Completer?
+
+    override func keyDown(with event: NSEvent) {
+        if let c = completer, c.isOpen {
+            switch event.keyCode {
+            case 125: c.move(1); return                       // down
+            case 126: c.move(-1); return                      // up
+            case 36, 76:                                      // return / enter
+                if event.modifierFlags.intersection([.command, .control]).isEmpty { c.acceptSelected(); return }
+                c.close()
+            case 48: c.acceptSelected(); return               // tab
+            case 53: c.close(); return                        // esc
+            case 123, 124, 115, 119, 116, 121: c.close()      // caret moves
+            default: break
+            }
+        }
+        if event.keyCode == 49, event.modifierFlags.contains(.control), let c = completer {  // ctrl+space
+            c.update(force: true)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command), event.keyCode == 36 || event.keyCode == 76 { completer?.close() }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        completer?.close()
+        super.mouseDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        completer?.close()
+        return super.resignFirstResponder()
+    }
+}
+
 struct SQLEditor: NSViewRepresentable {
     let tab: WorkTab
+    let state: AppState
 
     func makeCoordinator() -> Coordinator { Coordinator(tab: tab) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let sv = NSTextView.scrollableTextView()
+        let sv = NSScrollView()
+        sv.hasVerticalScroller = true
         sv.hasHorizontalScroller = true
-        guard let tv = sv.documentView as? NSTextView else { return sv }
+        sv.borderType = .noBorder
+        sv.drawsBackground = true
+        sv.backgroundColor = .textBackgroundColor
+        let tv = SQLTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isVerticallyResizable = true
+        tv.autoresizingMask = [.width]
+        sv.documentView = tv
         tv.delegate = context.coordinator
         tv.isRichText = false
         tv.allowsUndo = true
@@ -73,7 +123,12 @@ struct SQLEditor: NSViewRepresentable {
         tv.typingAttributes = [.font: SQLHighlighter.baseFont, .foregroundColor: NSColor.labelColor]
         tv.string = tab.sql
         SQLHighlighter.apply(to: tv.textStorage!, dialect: tab.connection.dialect)
+        let completer = Completer(tab: tab, state: state)
+        completer.tv = tv
+        tv.completer = completer
+        context.coordinator.completer = completer
         context.coordinator.textView = tv
+        tab.editor = tv
         DispatchQueue.main.async { tv.window?.makeFirstResponder(tv) }
         return sv
     }
@@ -87,16 +142,31 @@ struct SQLEditor: NSViewRepresentable {
         }
     }
 
+    static func dismantleNSView(_ sv: NSScrollView, coordinator: Coordinator) {
+        MainActor.assumeIsolated { coordinator.completer?.close() }
+    }
+
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var tab: WorkTab
         weak var textView: NSTextView?
+        var completer: Completer?
         init(tab: WorkTab) { self.tab = tab }
+
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            completer?.lastChangeLen = (replacementString as NSString?)?.length ?? 0
+            return true
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             tab.sql = tv.string
             if !tv.hasMarkedText() { SQLHighlighter.apply(to: tv.textStorage!, dialect: tab.connection.dialect) }
+            guard let c = completer else { return }
+            if c.skipNext { c.skipNext = false; return }
+            if c.lastChangeLen > 1 { c.close(); return }                   // paste / multi-char edit
+            if c.lastChangeLen == 0 { if c.isOpen { c.update(force: false) }; return }  // deletion
+            c.update(force: false)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

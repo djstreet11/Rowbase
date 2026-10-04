@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-04 (Phase 2 native MVP landed).
+> Last update: 2026-10-04 (native: flat layout, autocomplete, cancel, SSH).
 
 ## 1. Origin & idea
 
@@ -116,10 +116,11 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
   table browser with filter, tabs, data/structure views, WHERE/ORDER BY, paging, count, FK navigation + breadcrumbs, row inspector
   with referenced-by, SQL console (highlighting, ⌘↩ statement under caret, EXPLAIN, PG Seq Scan highlight), RW confirmation
   (incl. data-modifying WITH / EXPLAIN ANALYZE), prod accent bar, history (same JSONL as Python), copy TSV/JSON.
+  Since 2026-10-04: flat NSSplitView layout (closable sidebar ⌥⌘S / inspector ⌘I / Esc), schema-aware autocomplete popup,
+  query cancel (Stop / ⌘.), SSH tunnels, psql-like date/time formatting.
 - **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
-- **Gaps**: no autocomplete in editor, no query cancel, no SSH, empty result sets show no column names (MySQL/PG),
-  timestamps shown in UTC ISO format, Postgres values decoded from binary (unknown types → text/hex fallback),
-  not notarized.
+- **Gaps**: no inline editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
+  (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
 - **Distribution (later)**: Developer ID + notarization, Sparkle. App Store not planned (sandbox vs shared store/SSH).
 
 ### 4.3 Future: Linux / Windows
@@ -133,10 +134,12 @@ Deferred; keep contracts (§5) portable.
 {"version": 1, "connections": [{
   "id": "uuid", "name": "shop prod", "driver": "mysql|postgres|sqlite", "host": "…", "port": 3306, "socket": "/tmp/mysql.sock",
   "database": "…", "path": "/abs/file.db", "user": "…", "readOnly": true, "env": "local|dev|stage|prod",
-  "color": "#d33", "group": "work", "options": {"sslmode": "require"}
+  "color": "#d33", "group": "work", "options": {"sslmode": "require"},
+  "ssh": {"host": "bastion", "port": 22, "user": "deploy", "identityFile": "~/.ssh/id_ed25519"}
 }]}
 ```
 - Secrets: keychain service `rowbase`, account = `id`.
+- SSH: tunnels through the system `ssh` (`-N -L 127.0.0.1:<free>:<target>`, BatchMode, key/agent); URL form `?ssh=user@host:port`.
 - History JSONL: `{"ts","conn"(id),"connName","sql","source","rows"|"error","elapsed","affected"?}`.
 - Guard: same allow-lists/forbidden patterns; `tests/test_guard.py` vectors are the conformance suite.
 

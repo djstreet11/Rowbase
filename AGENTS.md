@@ -57,3 +57,7 @@ short: facts and rules only, no history.
 - 2026-10-04: PG binary NUMERIC must be decoded manually to keep dscale (Decimal/PostgresNumeric drop "7.00" → "7").
 - 2026-10-04: RW write-confirmation must also catch data-modifying `WITH … DELETE` and `EXPLAIN ANALYZE <write>`.
 - 2026-10-04: macOS has no `timeout` → `perl -e 'alarm 40; exec @ARGV' cmd`. No screen-recording permission → app self-snapshot hook.
+- 2026-10-04: User rejected macOS 26 floating glass sidebar + non-closable inspector → flat NSSplitView, every side panel closable.
+- 2026-10-04: SSH = system `ssh` subprocess (honours ~/.ssh/config); test via tests/fixtures/fake_ssh.py + ROWBASE_SSH (no sshd here).
+- 2026-10-04: MySQL `KILL QUERY` makes SLEEP() return normally → treat success-after-cancel as cancelled.
+- 2026-10-04: Safety hook blocks `rm` on `$VAR/...` globs — use literal paths or `"${VAR:?}"`.

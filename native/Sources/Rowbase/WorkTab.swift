@@ -25,7 +25,8 @@ final class WorkTab: Identifiable {
     var result: QueryResult? { didSet { resultVersion += 1 } }
     var resultVersion = 0
     var error: String?
-    var running = false
+    var runID: UUID?  // identifies the in-flight statement for Engine.cancel
+    var running = false { didSet { if running && !oldValue { runStart = Date() } } }
     var info: TableInfo?
     var showStructure = false
     var breadcrumbs: [Crumb] = []
@@ -33,8 +34,10 @@ final class WorkTab: Identifiable {
     var isExplain = false
     var hasMore = false
     var note: String?
+    var runStart: Date?
     @ObservationIgnored var selection = NSRange(location: 0, length: 0)
     @ObservationIgnored var token = 0
+    @ObservationIgnored weak var editor: SQLTextView?
 
     init(kind: Kind, connection: Connection) {
         self.kind = kind

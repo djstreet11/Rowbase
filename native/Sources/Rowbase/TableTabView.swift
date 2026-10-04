@@ -62,8 +62,13 @@ struct TableTabView: View {
             }
             .labelsHidden().frame(width: 70)
             .onChange(of: tab.limit) { apply() }
-            Button { apply() } label: { Label("Run", systemImage: "play.fill") }
-                .keyboardShortcut(.defaultAction)
+            if tab.running {
+                Button { state.cancel(tab) } label: { Label("Stop", systemImage: "stop.fill") }
+                    .tint(.red).keyboardShortcut(".", modifiers: .command).help("Stop the running query (⌘.)")
+            } else {
+                Button { apply() } label: { Label("Run", systemImage: "play.fill") }
+                    .keyboardShortcut(.defaultAction)
+            }
         }
     }
 

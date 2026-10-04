@@ -34,8 +34,14 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   the EventLoopFuture overload is picked. Results are binary → `PGFormat.cell` decodes common types.
 - `String(validating:as:)` is macOS 15+ → use `String(bytes:encoding:)`.
 - Empty result sets have no column names (MySQL/PG text paths) — known gap.
-- Snapshots: `cacheDisplay` can't capture vibrancy / the macOS 26 glass sidebar → in snapshot mode (`isSnapshot`) the app uses a
-  plain HStack layout and opaque backgrounds. Keep that when changing MainView/SidebarView.
+- Layout is a flat AppKit NSSplitView (SplitLayout.swift): sidebar | detail | inspector, opaque panes, no materials.
+  Don't reintroduce NavigationSplitView/.inspector (macOS 26 renders them as floating glass with shadows — user rejected it;
+  also invisible to cacheDisplay snapshots). The window toolbar is NOT captured by snapshots — ask the user to check it.
+- Extra snapshot envs: `ROWBASE_SNAPSHOT_INSPECT=1` (inspector on row 0), `ROWBASE_SNAPSHOT_COMPLETE="sql…"` (autocomplete,
+  writes `-popup.png`).
+- Cancel: `Engine.execute(…, runID:)` + `Engine.cancel(runID)`; WorkTab.runID; ⌘. / Stop button.
+- SSH: `Connection.ssh` → TunnelManager (system ssh, ROWBASE_SSH override, tests use tests/fixtures/fake_ssh.py);
+  `TunnelManager.shutdown()` on app terminate.
 - Quote tables with `Dialect.ident`, columns with `Dialect.column` (PG ident adds `public.`).
 - Review checklist for delegated UI work: build, `swift test`, snapshots of table tab (PG + MySQL + SQLite), SQL tab, EXPLAIN,
   connections sheet; read AppState.run/confirm for safety.

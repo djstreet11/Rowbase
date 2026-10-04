@@ -1,7 +1,12 @@
 import SwiftUI
+import RowbaseCore
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        TunnelManager.shutdown()  // don't leave ssh -L processes behind
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
@@ -28,6 +33,12 @@ struct RowbaseApp: App {
                 Button("Close Tab") {
                     if let id = state.activeTabID { state.closeTab(id) } else { NSApp.keyWindow?.performClose(nil) }
                 }.keyboardShortcut("w")
+            }
+            CommandGroup(replacing: .sidebar) {
+                Button(state.showSidebar ? "Hide Sidebar" : "Show Sidebar") { state.toggleSidebar() }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                Button(state.showInspector ? "Hide Inspector" : "Show Inspector") { state.toggleInspector() }
+                    .keyboardShortcut("i", modifiers: .command)
             }
             CommandMenu("Database") {
                 Button("Run") { state.runActive() }.keyboardShortcut(.return, modifiers: .command)

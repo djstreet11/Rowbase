@@ -112,6 +112,27 @@ struct ConnectionsSheet: View {
                     SecureField("Password", text: $password, prompt: Text(isNew ? "" : "unchanged"))
                 }
             }
+            if draft.dialect != .sqlite {
+                Section {
+                    Toggle("SSH tunnel", isOn: Binding(get: { draft.ssh != nil },
+                                                       set: { draft.ssh = $0 ? (draft.ssh ?? SSHConfig(host: "")) : nil }))
+                    if draft.ssh != nil {
+                        TextField("SSH host", text: sshText(\.host), prompt: Text("bastion.example.com or ~/.ssh/config alias"))
+                        TextField("SSH port", text: Binding(get: { draft.ssh?.port.map(String.init) ?? "" },
+                                                            set: { draft.ssh?.port = Int($0.filter(\.isNumber)) }), prompt: Text("22"))
+                        TextField("SSH user", text: sshOpt(\.user), prompt: Text("from ~/.ssh/config"))
+                        HStack {
+                            TextField("Identity file", text: sshOpt(\.identityFile), prompt: Text("~/.ssh/id_ed25519 (optional)"))
+                            Button("Choose…") { chooseKey() }
+                        }
+                    }
+                } footer: {
+                    if draft.ssh != nil {
+                        Text("Uses the system ssh with key/agent auth; ~/.ssh/config (aliases, ProxyJump) applies.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
             Section {
                 Picker("Env", selection: Binding(get: { draft.env ?? "" }, set: { draft.env = $0.isEmpty ? nil : $0 })) {
                     Text("none").tag("")
@@ -126,6 +147,7 @@ struct ConnectionsSheet: View {
             }
         }
         .formStyle(.grouped)
+        .frame(maxHeight: .infinity)
     }
 
     private var footer: some View {
@@ -143,6 +165,7 @@ struct ConnectionsSheet: View {
         }
         .controlSize(.small)
         .padding(10)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: actions
@@ -171,12 +194,28 @@ struct ConnectionsSheet: View {
         draft.host = c.host; draft.port = c.port; draft.socket = c.socket
         draft.database = c.database; draft.path = c.path; draft.user = c.user
         draft.options = c.options
+        if let ssh = c.ssh { draft.ssh = ssh }
         portText = c.port.map(String.init) ?? ""
         if let pw { password = pw }
         if draft.name.trimmingCharacters(in: .whitespaces).isEmpty {
             draft.name = c.host ?? (c.path.map { ($0 as NSString).lastPathComponent } ?? "")
         }
         pasteURL = ""
+    }
+
+    private func sshText(_ kp: WritableKeyPath<SSHConfig, String>) -> Binding<String> {
+        Binding(get: { draft.ssh?[keyPath: kp] ?? "" }, set: { draft.ssh?[keyPath: kp] = $0 })
+    }
+
+    private func sshOpt(_ kp: WritableKeyPath<SSHConfig, String?>) -> Binding<String> {
+        Binding(get: { draft.ssh?[keyPath: kp] ?? "" }, set: { draft.ssh?[keyPath: kp] = $0.isEmpty ? nil : $0 })
+    }
+
+    private func chooseKey() {
+        let p = NSOpenPanel()
+        p.canChooseFiles = true; p.canChooseDirectories = false; p.showsHiddenFiles = true
+        p.directoryURL = URL(fileURLWithPath: NSString(string: "~/.ssh").expandingTildeInPath)
+        if p.runModal() == .OK, let u = p.url { draft.ssh?.identityFile = (u.path as NSString).abbreviatingWithTildeInPath }
     }
 
     private func choose() {

@@ -30,6 +30,9 @@ final class AppState {
     var showConnections = false
     var showHistory = false
     var showInspector = false
+    var showSidebar: Bool = UserDefaults.standard.object(forKey: "rowbase.showSidebar") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showSidebar, forKey: "rowbase.showSidebar") }
+    }
     var filterFocusTick = 0
     var pendingRun: PendingRun?
     @ObservationIgnored private var infoCache: [String: TableInfo] = [:]
@@ -168,6 +171,9 @@ final class AppState {
         else { openTable(c.table, where: c.whereText, connection: tab.connection) }
     }
 
+    func toggleSidebar() { showSidebar.toggle() }
+    func toggleInspector() { showInspector.toggle() }
+
     func inspect(_ tab: WorkTab, row: Int) {
         tab.inspectRow = row
         showInspector = true
@@ -210,6 +216,12 @@ final class AppState {
                           options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// Stop the tab's running statement (KILL QUERY / pg_cancel_backend / sqlite3_interrupt via Engine.cancel).
+    func cancel(_ tab: WorkTab) {
+        guard tab.running, let id = tab.runID else { return }
+        Task { await engine.cancel(id) }
+    }
+
     func confirm(_ p: PendingRun) {
         pendingRun = nil
         Task { await execute(p.tab, sql: p.sql, isExplain: false) }
@@ -228,7 +240,8 @@ final class AppState {
         tab.note = nil
         let conn = tab.connection
         do {
-            let r = try await engine.execute(conn, sql, limit: tab.limit)
+            let id = UUID(); tab.runID = id
+            let r = try await engine.execute(conn, sql, limit: tab.limit, runID: id)
             guard tab.token == tok else { return }
             tab.isExplain = isExplain
             tab.result = r
@@ -263,7 +276,8 @@ final class AppState {
         }
         let sql = tab.buildSQL(extra: 1)
         do {
-            var r = try await engine.execute(conn, sql, limit: tab.limit + 1)
+            let id = UUID(); tab.runID = id
+            var r = try await engine.execute(conn, sql, limit: tab.limit + 1, runID: id)
             guard tab.token == tok else { return }
             if r.rows.count > tab.limit { r.rows.removeLast(r.rows.count - tab.limit); r.truncated = true } else { r.truncated = false }
             tab.isExplain = false
@@ -312,6 +326,19 @@ final class AppState {
         }
         if let t = env["ROWBASE_SNAPSHOT_TABLE"], !t.isEmpty { openTable(t) }
         if let sql = env["ROWBASE_SNAPSHOT_SQL"], !sql.isEmpty, let tab = openQuery(sql: sql) { run(tab) }
+        var completeTab: WorkTab?
+        if let text = env["ROWBASE_SNAPSHOT_COMPLETE"], !text.isEmpty, let tab = openQuery(sql: text) { completeTab = tab }
+        if env["ROWBASE_SNAPSHOT_INSPECT"] == "1" {
+            try? await Task.sleep(for: .milliseconds(1200))
+            if let t = activeTab { inspect(t, row: 0) }
+        }
+        if let tab = completeTab {
+            try? await Task.sleep(for: .milliseconds(600))
+            if let tv = tab.editor {
+                tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+                tv.completer?.update(force: true)
+            }
+        }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "connections" { showConnections = true }
         try? await Task.sleep(for: .milliseconds(2500))
         func render(_ w: NSWindow, to p: String) {
@@ -321,6 +348,11 @@ final class AppState {
         }
         let main = NSApp.windows.first(where: { $0.canBecomeMain && $0.sheetParent == nil })
         if let main { render(main, to: path) }
+        if let pop = completeTab?.editor?.completer?.popup.window, let v = pop.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+            v.cacheDisplay(in: v.bounds, to: rep)
+            let base = (path as NSString).deletingPathExtension
+            if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: base + "-popup.png")) }
+        }
         if let sheet = main?.attachedSheet ?? NSApp.windows.first(where: { $0.sheetParent != nil }) {
             let base = (path as NSString).deletingPathExtension
             render(sheet, to: base + "-sheet.png")
