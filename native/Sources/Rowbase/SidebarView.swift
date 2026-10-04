@@ -21,6 +21,10 @@ struct SidebarView: View {
                     Label("Connections", systemImage: "externaldrive.connected.to.line.below")
                 }
                 .buttonStyle(.borderless).help("Manage Connections (⇧⌘K)")
+                Button { state.showAIMCP = true } label: {
+                    Label("AI", systemImage: "sparkles")
+                }
+                .buttonStyle(.borderless).help("AI assistants (MCP) (⇧⌘M)")
                 Spacer()
                 if state.tablesLoading { ProgressView().controlSize(.mini) }
             }

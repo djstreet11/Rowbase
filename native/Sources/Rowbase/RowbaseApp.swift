@@ -51,6 +51,7 @@ struct RowbaseApp: App {
                 Divider()
                 Button("Find Table") { state.filterFocusTick += 1 }.keyboardShortcut("p")
                 Button("Connections…") { state.showConnections = true }.keyboardShortcut("k", modifiers: [.command, .shift])
+                Button("AI Assistants (MCP)…") { state.showAIMCP = true }.keyboardShortcut("m", modifiers: [.command, .shift])
                 Button("History") { state.showHistory = true }.keyboardShortcut("y")
             }
         }

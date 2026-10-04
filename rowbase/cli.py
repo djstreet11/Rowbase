@@ -94,10 +94,34 @@ def cmd_q(args):
     run_sql(args, sql)
 
 
+def cmd_doctor(args):
+    """Environment report for bug reports and support (never prints secrets)."""
+    import platform
+    from . import __version__
+    kr = store._keyring()
+    backend = type(kr.get_keyring()).__module__ + "." + type(kr.get_keyring()).__name__ if kr else "file (secrets.json, 0600)"
+    print(f"rowbase {__version__} · Python {platform.python_version()} · {platform.system()} {platform.release()} {platform.machine()}")
+    print(f"config dir: {store.HOME}")
+    print(f"secrets:    {backend}")
+    print(f"connections: {len(store.load())}")
+    for mod in ("pymysql", "pg8000", "sqlite3"):
+        try:
+            m = __import__(mod)
+            print(f"driver {mod}: {getattr(m, '__version__', getattr(m, 'sqlite_version', 'ok'))}")
+        except ImportError as e:
+            print(f"driver {mod}: MISSING ({e})")
+    import shutil
+    print(f"ssh client: {shutil.which('ssh') or 'not found (SSH tunnels unavailable)'}")
+
+
 def cmd_mcp(args):
     from . import mcp
     if args.print_config:
         cfg = mcp.client_config()
+        if args.json:  # consumed by the native app (single source of truth for snippets + prompt)
+            import json
+            print(json.dumps(cfg, ensure_ascii=False))
+            return
         for k in ("claude_code", "claude_desktop", "cursor", "codex", "vscode"):
             print(f"# {k}\n{cfg[k]}\n")
         print("# prompt to paste into your assistant\n" + cfg["prompt"])
@@ -110,7 +134,18 @@ def cmd_ui(args):
     server.serve(args.port, not args.no_open)
 
 
+def _utf8_stdio():
+    """Always speak UTF-8 (one-file builds, Windows consoles and pipes may default to ASCII/cp1252)."""
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            if stream and (stream.encoding or "").lower().replace("-", "") != "utf8":
+                stream.reconfigure(encoding="utf-8", errors="replace" if stream is not sys.stdin else "strict")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None):
+    _utf8_stdio()
     p = argparse.ArgumentParser(prog="rowbase", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-c", "--conn", default=os.environ.get("ROWBASE_CONN"), help="connection name or id (see `conns`)")
@@ -138,12 +173,17 @@ def main(argv=None):
     s.set_defaults(fn=cmd_desc)
     s = sub.add_parser("q", parents=[common], help="run one statement")
     s.add_argument("sql", nargs="?"); s.add_argument("-f", "--file"); s.set_defaults(fn=cmd_q)
+    sub.add_parser("doctor", help="show environment info (config dir, secrets backend, drivers)").set_defaults(fn=cmd_doctor)
     s = sub.add_parser("mcp", help="run the MCP server on stdio (for AI assistants)")
     s.add_argument("--print-config", action="store_true", help="print client setup snippets and the setup prompt")
+    s.add_argument("--json", action="store_true", help="with --print-config: machine-readable output")
     s.set_defaults(fn=cmd_mcp)
     s = sub.add_parser("ui", help="start the local web UI")
     s.add_argument("--port", type=int, default=8765); s.add_argument("--no-open", action="store_true"); s.set_defaults(fn=cmd_ui)
     argv = sys.argv[1:] if argv is None else argv
+    # C/POSIX locale (servers, containers): non-ASCII arguments arrive as surrogate escapes — decode them as UTF-8
+    argv = [x.encode("utf-8", "surrogateescape").decode("utf-8", "replace") if any("\udc80" <= ch <= "\udcff" for ch in x) else x
+            for x in argv]
     if not argv:  # double-clicked one-file binary: open the web UI
         argv = ["ui"]
     args = p.parse_args(argv)

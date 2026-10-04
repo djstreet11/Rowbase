@@ -1,0 +1,30 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: runner, POSTGRES_HOST_AUTH_METHOD: trust}
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+      mysql:
+        image: mariadb:11
+        env: {MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"}
+        ports: ["3306:3306"]
+        options: --health-cmd "healthcheck.sh --connect" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e .
+      - run: python -m unittest discover -s tests -t . -v
+        env:
+          ROWBASE_TEST_PG: postgres://runner@127.0.0.1:5432/rowbase_test
+          ROWBASE_TEST_MYSQL: mysql://root@127.0.0.1:3306/rowbase_test
+  swift:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: cd native && swift test   # PostgreSQL/MySQL cases skip without local servers

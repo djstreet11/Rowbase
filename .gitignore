@@ -18,3 +18,7 @@ xcuserdata/
 native/.build/
 native/.swiftpm/
 native/dist/
+dist/
+dist-build.log
+*.build/
+*.onefile-build/

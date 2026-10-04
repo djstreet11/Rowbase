@@ -13,6 +13,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Rowbase "$APP/Contents/MacOS/Rowbase"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Embedded CLI / MCP server (Python one-file build). Build it first: python packaging/build.py (repo root).
+CLI="../dist/rowbase-macos-arm64"
+if [[ -x "$CLI" ]]; then
+  cp "$CLI" "$APP/Contents/Resources/rowbase"
+else
+  echo "warning: $CLI not found — app will ship without the MCP server (run: python packaging/build.py)" >&2
+fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

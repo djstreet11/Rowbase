@@ -88,6 +88,8 @@ class MCPTest(unittest.TestCase):
         out = subprocess.run([sys.executable, "-m", "rowbase", "mcp", "--print-config"], env=self.env, capture_output=True, text=True).stdout
         self.assertIn("claude mcp add rowbase --", out)
         self.assertIn('"mcpServers"', out)
+        js = subprocess.run([sys.executable, "-m", "rowbase", "mcp", "--print-config", "--json"], env=self.env, capture_output=True, text=True).stdout
+        self.assertIn("rowbase-db", json.loads(js)["prompt"])
 
 
 if __name__ == "__main__":

@@ -40,6 +40,8 @@ struct AppToolbar: ToolbarContent {
                 .help("New Query (⌘T)")
             Button { state.showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
                 .help("History (⌘Y)")
+            Button { state.showAIMCP = true } label: { Image(systemName: "sparkles") }
+                .help("AI assistants (MCP)")
             Button { state.toggleInspector() } label: { Image(systemName: "sidebar.right") }
                 .help("Toggle Inspector (⌘I)")
         }

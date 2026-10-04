@@ -13,6 +13,7 @@ struct MainView: View {
         .navigationTitle(state.activeTab?.title ?? "Rowbase")
         .navigationSubtitle(subtitle)
         .sheet(isPresented: $state.showConnections) { ConnectionsSheet(state: state) }
+        .sheet(isPresented: $state.showAIMCP) { AIMCPSheet(state: state) }
         .sheet(isPresented: $state.showHistory) { HistorySheet(state: state) }
         .alert("Run on READ-WRITE connection \(state.pendingRun?.tab.connection.name ?? "")?",
                isPresented: Binding(get: { state.pendingRun != nil }, set: { if !$0 { state.pendingRun = nil } }),

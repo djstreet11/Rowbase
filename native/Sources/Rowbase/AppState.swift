@@ -58,6 +58,7 @@ final class AppState {
     var status = ""
     var showConnections = false
     var showHistory = false
+    var showAIMCP = false
     var showInspector = false
     var showSidebar: Bool = AppDefaults.store.object(forKey: "rowbase.showSidebar") as? Bool ?? true {
         didSet { AppDefaults.store.set(showSidebar, forKey: "rowbase.showSidebar") }
@@ -498,6 +499,7 @@ final class AppState {
             }
         }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "connections" { showConnections = true }
+        if env["ROWBASE_SNAPSHOT_SHEET"] == "ai" { showAIMCP = true }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "history" { showHistory = true }
         try? await Task.sleep(for: .milliseconds(2500))
         if env["ROWBASE_SNAPSHOT_COLUMNS"] == "1", let t = activeTab {
