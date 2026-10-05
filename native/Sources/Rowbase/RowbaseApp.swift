@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
+        _ = AppUpdater.shared   // starts Sparkle's scheduled checks (no-op outside the bundled app)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
@@ -26,6 +27,9 @@ struct RowbaseApp: App {
         }
         .defaultSize(width: 1280, height: 800)
         .commands {
+            CommandGroup(after: .appInfo) {
+                if AppUpdater.shared.isAvailable { CheckForUpdatesButton(updater: AppUpdater.shared) }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New SQL Tab") { state.openQuery() }.keyboardShortcut("t")
             }
@@ -54,6 +58,9 @@ struct RowbaseApp: App {
                 Button("AI Assistants (MCP)…") { state.showAIMCP = true }.keyboardShortcut("m", modifiers: [.command, .shift])
                 Button("History") { state.showHistory = true }.keyboardShortcut("y")
             }
+        }
+        Settings {
+            UpdatesSettingsView(updater: AppUpdater.shared)
         }
     }
 }

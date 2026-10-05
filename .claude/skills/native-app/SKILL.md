@@ -69,3 +69,7 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - NEVER use SwiftUI `.textSelection(.enabled)` — use `SelectableText` (Util.swift, AppKit NSTextField). A user crash on macOS 15.0.1
   (pointer-auth trap in CoreText while SwiftUI released selectable text whose content changed, 2026-10-05) led to this rule.
   We develop on macOS 26 — test-sensitive UI paths may behave differently on macOS 14/15; ask the user for crash reports there.
+- Auto-update = Sparkle 2 (Updater.swift, docs/UPDATES.md). `AppUpdater` is inert without `SUPublicEDKey` in Info.plist (so
+  `.build/debug/Rowbase` and snapshots never check). bundle.sh copies Sparkle.framework to Contents/Frameworks, adds the rpath,
+  signs Sparkle's XPC services/Autoupdate/Updater.app → framework → app (never `--deep`). Sparkle types are `@MainActor` in Swift.
+  Verify an update end-to-end: build N-1 bundle → install to /Applications → publish/serve appcast with N → Check for Updates.

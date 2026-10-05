@@ -12,6 +12,11 @@ APP="dist/Rowbase.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Rowbase "$APP/Contents/MacOS/Rowbase"
+# Sparkle (auto-update): SwiftPM leaves the framework next to the binary; the bundle needs it in Frameworks/ + an rpath
+mkdir -p "$APP/Contents/Frameworks"
+ditto .build/release/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
+otool -l "$APP/Contents/MacOS/Rowbase" | grep -q "@executable_path/../Frameworks" \
+  || install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Rowbase"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # Embedded CLI / MCP server (Python one-file build). Build it first: python packaging/build.py (repo root).
 CLI="../dist/rowbase-macos-arm64"
@@ -21,6 +26,8 @@ else
   echo "warning: $CLI not found — app will ship without the MCP server (run: python packaging/build.py)" >&2
 fi
 
+# Owner's rule: ad-hoc builds ask before installing an update; Developer ID builds install silently (on quit/relaunch)
+if [[ -n "${ROWBASE_SIGN_IDENTITY:-}" ]]; then AUTO_UPDATE="<true/>"; else AUTO_UPDATE="<false/>"; fi
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -42,15 +49,24 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>SUFeedURL</key><string>https://github.com/djstreet11/Rowbase/releases/latest/download/appcast.xml</string>
   <key>SUPublicEDKey</key><string>UkOKTzt1PkcCC7qWiHHgHptn0b4yowWM392/i3/yVVo=</string>
   <key>SUScheduledCheckInterval</key><integer>86400</integer>
+  <key>SUAutomaticallyUpdate</key>${AUTO_UPDATE}
   <key>NSHumanReadableCopyright</key><string>© $(date +%Y) Rowbase</string>
 </dict>
 </plist>
 PLIST
 
+# Sign inside-out (never --deep): Sparkle's helpers, the framework, then the app. Hardened runtime only with a real identity.
+SPK="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+if [[ -n "${ROWBASE_SIGN_IDENTITY:-}" ]]; then SIGN=(--force --options runtime --timestamp --sign "$ROWBASE_SIGN_IDENTITY")
+else SIGN=(--force --sign -); fi
+codesign "${SIGN[@]}" "$SPK/XPCServices/Installer.xpc"
+codesign "${SIGN[@]}" --preserve-metadata=entitlements "$SPK/XPCServices/Downloader.xpc"
+codesign "${SIGN[@]}" "$SPK/Autoupdate" "$SPK/Updater.app"
+codesign "${SIGN[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
 if [[ -n "${ROWBASE_SIGN_IDENTITY:-}" ]]; then
-  codesign --force --options runtime --timestamp --entitlements Rowbase.entitlements --sign "$ROWBASE_SIGN_IDENTITY" "$APP"
+  codesign "${SIGN[@]}" --entitlements Rowbase.entitlements "$APP"
   codesign --verify --strict --verbose=2 "$APP"
 else
-  codesign --force -s - "$APP"
+  codesign "${SIGN[@]}" "$APP"
 fi
 echo "$(pwd)/$APP"

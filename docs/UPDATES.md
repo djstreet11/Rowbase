@@ -4,7 +4,7 @@ Goal: the update flow users know from Claude Desktop, Antigravity and PhpStorm.
 **Check for Updates…** → "You're up to date" *or* "Rowbase 0.3.0 is available" + release notes → **Install and Relaunch**
 → download (progress) → verify → replace the app → relaunch. One click after the check, no DMG dragging, no browser.
 
-Status: step 1 (release pipeline) implemented; app/CLI parts are design. ADR: docs/decisions.md, "Auto-update".
+Status: step 1 (release pipeline) and step 2 (app code) implemented; CLI part is design. ADR: docs/decisions.md, "Auto-update".
 
 ## 1. What we update, per channel
 
@@ -40,13 +40,13 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
   stays staged and is installed on the next quit.
 
 ### Code (small)
-- `Package.swift`: `.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")`, product `Sparkle`
-  → `Rowbase` target only (RowbaseCore stays UI/updater-free).
-- `Updater.swift`: `SPUStandardUpdaterController(startingUpdater: true, …)` owned by `AppDelegate`; a
-  `CheckForUpdatesView` (`CommandGroup(after: .appInfo)`) bound to `updater.canCheckForUpdates`; a Settings pane bound
-  to `automaticallyChecksForUpdates` / `automaticallyDownloadsUpdates` / `lastUpdateCheckDate`.
-- Snapshot hook `ROWBASE_SNAPSHOT_UPDATE=<appcast file URL>` → runs a probe-only check against a local appcast
-  (verification without clicking, like the other snapshot hooks).
+- `Package.swift`: Sparkle `from: "2.9.6"` → `Rowbase` target only (RowbaseCore stays UI/updater-free).
+- `Updater.swift`: `AppUpdater.shared` wraps `SPUStandardUpdaterController(startingUpdater: true, …)`, created in
+  `applicationDidFinishLaunching`; inert without `SUPublicEDKey` in Info.plist (dev builds, snapshots). App menu
+  "Check for Updates…" (`CommandGroup(after: .appInfo)`), Settings (⌘,) pane: automatic checks / automatic download +
+  install / current version / last checked / Check Now. No `canCheckForUpdates` binding: a second check while a session
+  runs just brings Sparkle's window forward.
+- `SUAutomaticallyUpdate` default = false for ad-hoc builds, true when bundle.sh signs with `ROWBASE_SIGN_IDENTITY`.
 
 ### Bundle (`native/scripts/bundle.sh`)
 - Copy `.build/release/Sparkle.framework` → `Rowbase.app/Contents/Frameworks/`; add rpath
@@ -54,7 +54,7 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 - Info.plist: `SUFeedURL` = `https://github.com/djstreet11/Rowbase/releases/latest/download/appcast.xml`,
   `SUPublicEDKey` = public EdDSA key (already in bundle.sh), `SUEnableAutomaticChecks` (unset → Sparkle asks once), `SUScheduledCheckInterval` 86400.
 - Signing order: sign `Sparkle.framework` (its XPC services / Autoupdate / Updater.app) first, then the app — never
-  `--deep`. Not sandboxed → Sparkle's XPC installer services are not needed and can be removed from the framework copy.
+  `--deep`. XPC services are kept and re-signed (Sparkle's documented order).
 
 ### Release pipeline (`.github/workflows/release.yml`, job `dmg`)
 1. Build the app as today; additionally produce `Rowbase-<v>.zip` (`ditto -c -k --keepParent Rowbase.app`) — the
@@ -122,7 +122,7 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 1. ✅ **Pipeline first** (no user-visible change): `Rowbase-<v>.zip` (native/scripts/release.sh), `SHA256SUMS`, `appcast.xml`
    (packaging/appcast.py, tests/test_appcast.py) as release assets. appcast.xml appears once the secret
    `SPARKLE_ED_PRIVATE_KEY` exists (docs/RELEASING.md → "Auto-update key").
-2. **App**: Sparkle + menu item + Settings pane; release N ships the updater, release N+1 is the first real auto-update
+2. 🟡 **App** (code done, needs a Mac run): Sparkle + menu item + Settings pane (native/Sources/Rowbase/Updater.swift); release N ships the updater, release N+1 is the first real auto-update
    (users on versions without Sparkle must download the DMG once more — say so in N's release notes).
 3. **CLI**: `rowbase update`, `/api/version`, web banner.
 4. Developer ID + notarization → removes the Keychain re-prompt and Gatekeeper warnings.

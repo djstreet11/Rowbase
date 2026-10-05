@@ -11,13 +11,16 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
         .package(url: "https://github.com/vapor/mysql-nio.git", from: "1.7.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.6"),   // auto-update, app only
     ],
     targets: [
         .target(name: "RowbaseCore", dependencies: [
             .product(name: "PostgresNIO", package: "postgres-nio"),
             .product(name: "MySQLNIO", package: "mysql-nio"),
         ], linkerSettings: [.linkedLibrary("sqlite3")]),
-        .executableTarget(name: "Rowbase", dependencies: ["RowbaseCore"]),
+        .executableTarget(name: "Rowbase", dependencies: [
+            "RowbaseCore", .product(name: "Sparkle", package: "Sparkle"),
+        ]),
         .testTarget(name: "RowbaseCoreTests", dependencies: ["RowbaseCore"]),
     ]
 )
