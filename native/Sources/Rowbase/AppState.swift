@@ -537,6 +537,7 @@ final class AppState {
                 try? await Task.sleep(for: .milliseconds(900))
             }
         }
+        if env["ROWBASE_SNAPSHOT_SCROLL"] != nil { try? await Task.sleep(for: .seconds(25)) }  // ResultGrid.benchScroll runs meanwhile
         func render(_ w: NSWindow, to p: String) {
             // Theme frame (contentView.superview) includes titlebar + toolbar chrome; the content view is drawn
             // on top explicitly because SwiftUI-hosted content is not always part of the theme frame's cache pass.

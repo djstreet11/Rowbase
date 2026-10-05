@@ -145,20 +145,23 @@ final class GridTableView: NSTableView {
 /// Small rounded "NULL" capsule in tertiary color.
 final class NullPill: NSView {
     let label = NSTextField(labelWithString: "NULL")
+    static let size: NSSize = {
+        let l = NSTextField(labelWithString: "NULL")
+        l.font = .systemFont(ofSize: 9, weight: .semibold)
+        return NSSize(width: ceil(l.intrinsicContentSize.width) + 10, height: 14)
+    }()
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         label.font = .systemFont(ofSize: 9, weight: .semibold)
         label.textColor = .tertiaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
     }
     required init?(coder: NSCoder) { fatalError() }
+    override func layout() {
+        let h = ceil(label.intrinsicContentSize.height)
+        label.frame = NSRect(x: 5, y: (bounds.height - h) / 2, width: bounds.width - 10, height: h)
+    }
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
         layer?.cornerRadius = 4
@@ -167,37 +170,48 @@ final class NullPill: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
+/// Grid cell with manual frame layout. No Auto Layout on purpose: wide tables (70+ columns) put thousands of cell
+/// views in the window's constraint engine and vertical scrolling spent ~all its time in CoreAutoLayout.
 final class GridCell: NSTableCellView {
     let label = NSTextField(labelWithString: "")
-    private let pill = NullPill()
-    private let link = NSImageView()
-    private var labelTrailing: NSLayoutConstraint!
-    private var pillLeading: NSLayoutConstraint!
-    private var pillTrailing: NSLayoutConstraint!
+    // NULL pill and FK arrow are created on first use: wide tables keep thousands of cells alive.
+    private var pill: NullPill?
+    private var link: NSImageView?
+    private var pillRight = false
     /// Background tint for edited cells (re-resolved on appearance change).
-    var tint: NSColor? { didSet { applyTint() } }
+    var tint: NSColor? { didSet { if tint != oldValue || tint != nil { applyTint() } } }
     /// FK value: shows a small arrow glyph while the row is hovered.
-    var isFK = false { didSet { updateLink() } }
-    var hover = false { didSet { updateLink() } }
+    var isFK = false { didSet { if isFK != oldValue { needsLayout = true }; updateLink() } }
+    var hover = false { didSet { if hover != oldValue { updateLink() } } }
 
     private func updateLink() {
-        link.isHidden = !(isFK && hover)
-        labelTrailing.constant = isFK ? -16 : -8
+        let show = isFK && hover
+        if show && link == nil {
+            let l = NSImageView()
+            let cfg = NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)
+            l.image = NSImage(systemSymbolName: "arrow.up.right", accessibilityDescription: "Follow reference")?.withSymbolConfiguration(cfg)
+            l.contentTintColor = .linkColor
+            addSubview(l)
+            link = l
+            needsLayout = true
+        }
+        link?.isHidden = !show
     }
 
     func setNull(_ on: Bool, right: Bool) {
-        pill.isHidden = !on
-        pillLeading.isActive = !right
-        pillTrailing.isActive = right
+        if on && pill == nil { let p = NullPill(); addSubview(p); pill = p; needsLayout = true }
+        pill?.isHidden = !on
+        if right != pillRight { pillRight = right; needsLayout = true }
     }
 
     private func applyTint() {
+        if tint != nil && !wantsLayer { wantsLayer = true }
         effectiveAppearance.performAsCurrentDrawingAppearance { layer?.backgroundColor = tint?.cgColor }
     }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); applyTint() }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); if tint != nil { applyTint() } }
 
     func beginEditing(text: String, font: NSFont) {
-        pill.isHidden = true
+        pill?.isHidden = true
         label.isEditable = true
         label.isSelectable = true
         label.drawsBackground = true
@@ -206,48 +220,37 @@ final class GridCell: NSTableCellView {
         label.textColor = .labelColor
         label.alignment = .left
         label.stringValue = text
+        needsLayout = true
     }
 
     func endEditing() {
+        guard label.isEditable else { return }
         label.isEditable = false
         label.isSelectable = false
         label.drawsBackground = false
     }
 
+    private static var lineHeight: [NSFont: CGFloat] = [:]
+    override func layout() {
+        let b = bounds
+        let f = label.font ?? .systemFont(ofSize: 12)
+        let lh = Self.lineHeight[f] ?? { let h = ceil(f.boundingRectForFont.height); Self.lineHeight[f] = h; return h }()
+        let h = min(b.height, max(lh, 16))
+        label.frame = NSRect(x: 4, y: floor((b.height - h) / 2), width: max(0, b.width - 4 - (isFK ? 16 : 8)), height: h)
+        let ps = NullPill.size
+        pill?.frame = NSRect(x: pillRight ? b.width - 4 - ps.width : 4, y: floor((b.height - ps.height) / 2), width: ps.width, height: ps.height)
+        link?.frame = NSRect(x: b.width - 14, y: floor((b.height - 10) / 2), width: 10, height: 10)
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
-        wantsLayer = true
         identifier = ResultGrid.cellID
-        label.translatesAutoresizingMaskIntoConstraints = false
         label.lineBreakMode = .byTruncatingTail
         label.usesSingleLineMode = true
         label.cell?.truncatesLastVisibleLine = true
         label.maximumNumberOfLines = 1
         addSubview(label)
         textField = label
-        pill.translatesAutoresizingMaskIntoConstraints = false
-        pill.isHidden = true
-        addSubview(pill)
-        let cfg = NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)
-        link.image = NSImage(systemSymbolName: "arrow.up.right", accessibilityDescription: "Follow reference")?.withSymbolConfiguration(cfg)
-        link.contentTintColor = .linkColor
-        link.isHidden = true
-        link.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(link)
-        labelTrailing = label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8)
-        pillLeading = pill.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4)
-        pillTrailing = pill.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)
-        pillTrailing.isActive = false
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            labelTrailing,
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            pillLeading,
-            pill.centerYAnchor.constraint(equalTo: centerYAnchor),
-            pill.heightAnchor.constraint(equalToConstant: 14),
-            link.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            link.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
     }
     required init?(coder: NSCoder) { fatalError() }
 }
@@ -308,6 +311,21 @@ final class GridRowView: NSTableRowView {
     }
 }
 
+/// Frame-laid-out host for the grid's scroll view. Cell churn while scrolling must not dirty the SwiftUI hosting view:
+/// otherwise every scroll step re-runs SwiftUI layout, which measures the whole table through a constraint engine.
+final class GridContainer: NSView {
+    let scrollView: NSScrollView
+    init(_ sv: NSScrollView) {
+        scrollView = sv
+        super.init(frame: .zero)
+        addSubview(sv)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
+    override var fittingSize: NSSize { .zero }
+    override func layout() { scrollView.frame = bounds }
+}
+
 struct ResultGrid: NSViewRepresentable {
     static let cellID = NSUserInterfaceItemIdentifier("rbcell")
 
@@ -326,7 +344,7 @@ struct ResultGrid: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> GridContainer {
         let c = context.coordinator
         let tv = GridTableView()
         tv.usesAlternatingRowBackgroundColors = false
@@ -351,6 +369,7 @@ struct ResultGrid: NSViewRepresentable {
         tv.onReturn = { [weak c] in c?.beginEditSelected() ?? false }
         tv.menuProvider = { [weak c] p in c?.menu(at: p) }
         c.table = tv
+        if let n = Int(ProcessInfo.processInfo.environment["ROWBASE_SNAPSHOT_SCROLL"] ?? "") { Self.benchScroll(tv, passes: n) }
         let sv = NSScrollView()
         sv.documentView = tv
         sv.hasVerticalScroller = true
@@ -358,10 +377,39 @@ struct ResultGrid: NSViewRepresentable {
         sv.autohidesScrollers = true
         sv.drawsBackground = true
         sv.backgroundColor = .textBackgroundColor
-        return sv
+        return GridContainer(sv)
     }
 
-    func updateNSView(_ sv: NSScrollView, context: Context) {
+    /// Fill the offered space. Without this SwiftUI asks the scroll view for `fittingSize`, which pushes every cell view
+    /// into a constraint engine on each SwiftUI layout pass (the bulk of the remaining scroll cost on wide tables).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: GridContainer, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 400, height: proposal.height ?? 300)
+    }
+
+    /// Snapshot hook: scroll the grid top→bottom `passes` times, forcing a display each step; prints the time (perf checks).
+    private static func benchScroll(_ tv: NSTableView, passes: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            guard let clip = tv.enclosingScrollView?.contentView else { return }
+            let t0 = Date()
+            var steps = 0
+            for _ in 0..<passes {
+                var y: CGFloat = 0
+                while y < tv.bounds.height - clip.bounds.height {
+                    y += 44
+                    clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+                    tv.enclosingScrollView?.reflectScrolledClipView(clip)
+                    tv.window?.displayIfNeeded()
+                    steps += 1
+                }
+                clip.scroll(to: .zero)
+            }
+            print(String(format: "ROWBASE_SCROLL steps=%d total=%.3fs per_step=%.2fms", steps, Date().timeIntervalSince(t0),
+                         Date().timeIntervalSince(t0) * 1000 / Double(max(steps, 1))))
+            fflush(stdout)
+        }
+    }
+
+    func updateNSView(_ sv: GridContainer, context: Context) {
         let c = context.coordinator
         c.onFollowFK = onFollowFK
         c.onInspect = onInspect
@@ -417,11 +465,11 @@ struct ResultGrid: NSViewRepresentable {
             }
             let visible = result.columns.indices.filter { !hidden.contains(result.columns[$0]) }
             var num: Set<Int> = []
-            for i in result.columns.indices {
+            if v == version && tys == types { num = numCols } else { for i in result.columns.indices {
                 if !tys[i].isEmpty { if isNumericType(tys[i]) { num.insert(i) }; continue }
                 let vals = result.rows.prefix(60).compactMap { i < $0.count ? $0[i] : nil }
                 if !vals.isEmpty, vals.allSatisfy({ $0.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil }) { num.insert(i) }
-            }
+            } }
             let key = zip(result.columns, tys).map { "\($0)\u{1}\($1)" }.joined(separator: "\u{2}")
                 + "|\(fk.sorted())|N\(num.sorted())|T\(tp)|V\(visible)|E\(explain)"
             let dataChanged = v != version
@@ -587,6 +635,14 @@ struct ResultGrid: NSViewRepresentable {
             return v
         }
 
+        /// Single-line cell text. A cell is at most ~380pt wide, so lay out only a short prefix: truncating multi-KB
+        /// strings made CoreText typeset every big value on each vertical scroll (90% CPU on wide tables).
+        static func display(_ v: String) -> String {
+            let s = v.utf8.count > 400 ? String(v.prefix(300)) + "…" : v
+            guard s.contains(where: \.isNewline) else { return s }
+            return s.replacingOccurrences(of: "\r\n", with: "↵").replacingOccurrences(of: "\n", with: "↵").replacingOccurrences(of: "\r", with: "↵")
+        }
+
         private func style(_ cell: GridCell, value v: String?, column ci: Int, edited: Bool = false, strike: Bool = false, blank: Bool = false) {
             let l = cell.label
             let right = !transpose && numCols.contains(ci)
@@ -597,9 +653,9 @@ struct ResultGrid: NSViewRepresentable {
                 let bad = isBad(ci, v)
                 l.font = bad ? boldFont : font
                 l.textColor = strike ? .secondaryLabelColor : (bad ? .systemOrange : (fkCols.contains(ci) ? .linkColor : .labelColor))
-                let shown = v.count > 2000 ? String(v.prefix(2000)) : v
-                l.stringValue = shown.contains("\n") ? shown.replacingOccurrences(of: "\r\n", with: "↵").replacingOccurrences(of: "\n", with: "↵") : shown
-                cell.toolTip = v.count > 500 ? String(v.prefix(500)) + "…" : v
+                l.stringValue = Self.display(v)
+                let n = v.utf8.count  // O(1); String.count is O(n) and ran for every visible cell on each scroll
+                cell.toolTip = n < 24 ? nil : n > 500 ? String(v.prefix(500)) + "…" : v
             } else if blank {
                 l.font = font
                 l.textColor = .tertiaryLabelColor
@@ -614,6 +670,7 @@ struct ResultGrid: NSViewRepresentable {
             if strike {
                 let ps = NSMutableParagraphStyle()
                 ps.lineBreakMode = .byTruncatingTail
+                ps.alignment = l.alignment
                 l.attributedStringValue = NSAttributedString(string: l.stringValue, attributes: [
                     .font: l.font ?? font, .foregroundColor: l.textColor ?? NSColor.secondaryLabelColor,
                     .strikethroughStyle: NSUnderlineStyle.single.rawValue, .paragraphStyle: ps])
