@@ -50,6 +50,9 @@ final class WorkTab: Identifiable {
     var saving = false
     var exporting = false
     var hint: String?
+    /// Display label of the referenced object (implicit-reference navigation), shown in the title.
+    var label: String?
+    @ObservationIgnored var labelWhere = ""   // label applies only while the filter is unchanged
     /// Query tabs: last successfully executed statement and whether re-running it for export is safe (read-only verb).
     var lastSQL = ""
     var exportable = false
@@ -97,6 +100,7 @@ final class WorkTab: Identifiable {
     var title: String {
         switch kind {
         case .table(let t):
+            if let label, whereText == labelWhere { return "\(t) · \(label)" }
             let w = Self.strip(whereText, "WHERE")
             return w.isEmpty ? t : "\(t) · \(w)"
         case .query: return "SQL"

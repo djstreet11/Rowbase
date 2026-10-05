@@ -44,7 +44,8 @@ struct RowInspector: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(r.columns.enumerated()), id: \.offset) { i, name in
                             if filter.isEmpty || name.localizedCaseInsensitiveContains(filter) {
-                                field(tab: tab, name: name, value: i < row.count ? row[i] : nil, row: tab.inspectRow ?? 0)
+                                field(tab: tab, name: name, value: i < row.count ? row[i] : nil, row: tab.inspectRow ?? 0,
+                                      hint: Refs.hintColumn(for: name, in: r.columns).flatMap { r.columns.firstIndex(of: $0) }.flatMap { $0 < row.count ? row[$0] : nil })
                                 Divider().padding(.leading, 12)
                             }
                         }
@@ -78,11 +79,13 @@ struct RowInspector: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-    private func field(tab: WorkTab, name: String, value: String?, row: Int) -> some View {
+    private func field(tab: WorkTab, name: String, value: String?, row: Int, hint: String?) -> some View {
         let ci = tab.info?.columns.first { $0.name == name }
         let editable = tab.isEditable(name) && !tab.deleted.contains(row)
         let edited = tab.isEdited(row: row, column: name)
-        let fk = ci?.fk != nil && !tab.isQuery
+        let pk = tab.info?.primaryKey
+        let fk = (ci?.fk != nil && !tab.isQuery)
+            || (state.refReady.contains(state.refKey(tab.connection)) && value.map(Refs.isUUID) == true && pk != [name])
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Text(name).fontWeight(.semibold).lineLimit(1)
@@ -114,7 +117,7 @@ struct RowInspector: View {
                     Spacer(minLength: 0)
                 }
                 if fk, let value {
-                    Button { state.followFK(from: tab, column: name, value: value) } label: { Image(systemName: "arrow.right.circle") }
+                    Button { state.followFK(from: tab, column: name, value: value, hint: hint) } label: { Image(systemName: "arrow.right.circle") }
                         .buttonStyle(.borderless).foregroundStyle(Color(nsColor: .linkColor)).help("Open referenced row")
                 }
             }

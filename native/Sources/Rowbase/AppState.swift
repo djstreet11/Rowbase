@@ -70,6 +70,10 @@ final class AppState {
     var pendingDiscard: PendingDiscard?
     var exportPrompt: ExportPrompt?
     @ObservationIgnored private var infoCache: [String: TableInfo] = [:]
+    @ObservationIgnored private var refCache: [String: Task<[RefTable], Never>] = [:]
+    @ObservationIgnored private var learnedRefs: [String: String] = [:]
+    /// Connection keys (refKey) whose database has UUID-keyed tables: their grids show UUID values as links.
+    var refReady: Set<String> = []
     @ObservationIgnored private var bootstrapped = false
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var persistTabs = false
@@ -227,6 +231,7 @@ final class AppState {
 
     func refresh() {
         infoCache.removeAll()
+        refCache.removeAll()
         Task { await loadTables() }
     }
 
@@ -235,6 +240,7 @@ final class AppState {
         selectedConnectionID = saved.id
         await engine.reset(saved.id)
         infoCache = infoCache.filter { !$0.key.hasPrefix(saved.id + "|") }
+        refCache = refCache.filter { !$0.key.hasPrefix(saved.id + "|") }
         await loadTables()
     }
 
@@ -263,7 +269,7 @@ final class AppState {
         activeTabID = id
     }
 
-    func openTable(_ name: String, where w: String = "", chain: [Crumb] = [], connection: Connection? = nil) {
+    func openTable(_ name: String, where w: String = "", chain: [Crumb] = [], connection: Connection? = nil, label: String? = nil) {
         guard let conn = connection ?? selectedConnection else { return }
         if let t = tabs.first(where: { $0.connection.id == conn.id && $0.connection.database == conn.database && $0.kind == .table(name) && $0.whereText == w }) {
             activeTabID = t.id
@@ -271,6 +277,8 @@ final class AppState {
         }
         let t = WorkTab(kind: .table(name), connection: conn)
         t.whereText = w
+        t.label = label
+        t.labelWhere = w
         t.breadcrumbs = chain
         tabs.append(t)
         activeTabID = t.id
@@ -294,11 +302,76 @@ final class AppState {
         if tabs.isEmpty { showInspector = false }
     }
 
-    func followFK(from tab: WorkTab, column: String, value: String) {
-        guard let fk = tab.info?.columns.first(where: { $0.name == column })?.fk else { return }
+    /// Follow a link cell: a real foreign key, else an implicit UUID reference (`hint`: sibling type-column value).
+    func followFK(from tab: WorkTab, column: String, value: String, hint: String? = nil) {
+        if !tab.isQuery, let fk = tab.info?.columns.first(where: { $0.name == column })?.fk {
+            let d = tab.connection.dialect
+            let lit = value.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil ? value : d.literal(value)
+            openTable(fk.table, where: "\(d.column(fk.column)) = \(lit)", chain: chain(from: tab, via: column), connection: tab.connection)
+            return
+        }
+        guard Refs.isUUID(value) else { return }
+        Task { await followRef(from: tab, column: column, value: value, hint: hint) }
+    }
+
+    // MARK: implicit references
+
+    func refKey(_ c: Connection) -> String { "\(c.id)|\(c.database ?? "")" }
+
+    /// Tables with a UUID primary key (cached per connection + database). Non-empty → the grid links UUID values.
+    @discardableResult
+    func refTables(for c: Connection) async -> [RefTable] {
+        let k = refKey(c)
+        let task = refCache[k] ?? {
+            let t = Task { [engine] in (try? await engine.refTables(c)) ?? [] }
+            refCache[k] = t
+            return t
+        }()
+        let r = await task.value
+        if !r.isEmpty && !refReady.contains(k) { refReady.insert(k) }
+        return r
+    }
+
+    func followRef(from tab: WorkTab, column: String, value: String, hint: String?) async {
+        let c = tab.connection
+        tab.hint = "Looking up \(value)…"
+        let all = await refTables(for: c)
+        let names = all.map(\.name)
+        let learnKey = "\(refKey(c))|\(tab.tableName ?? "")|\(column)"
+        let byHint = hint.flatMap { Refs.candidates(column: "", hint: $0, tables: names).first }
+        var order: [String] = []
+        for n in [byHint, learnedRefs[learnKey]].compactMap({ $0 }) + Refs.candidates(column: column, hint: nil, tables: names)
+        where !order.contains(n) { order.append(n) }
+        let cands = order.compactMap { n in all.first { $0.name == n } }
+        do {
+            let m = try await engine.resolveRef(c, value: value, candidates: cands, all: all)
+            tab.hint = nil
+            switch m.count {
+            case 0: tab.flashHint("\(value) not found in \(all.count) tables with a UUID key")
+            case 1:
+                if byHint == nil { learnedRefs[learnKey] = m[0].table }
+                openRef(m[0], value: value, from: tab, via: column, tables: all)
+            default:
+                let menu = NSMenu()
+                for x in m {
+                    let item = NSMenuItem(title: x.label.isEmpty ? x.table : "\(x.table) — \(x.label)", action: #selector(MenuAction.run), keyEquivalent: "")
+                    let a = MenuAction { [weak self] in self?.openRef(x, value: value, from: tab, via: column, tables: all) }
+                    item.target = a
+                    item.representedObject = a
+                    menu.addItem(item)
+                }
+                menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+            }
+        } catch {
+            tab.flashHint(error.localizedDescription)
+        }
+    }
+
+    private func openRef(_ m: RefMatch, value: String, from tab: WorkTab, via column: String, tables: [RefTable]) {
+        guard let t = tables.first(where: { $0.name == m.table }) else { return }
         let d = tab.connection.dialect
-        let lit = value.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil ? value : d.literal(value)
-        openTable(fk.table, where: "\(d.column(fk.column)) = \(lit)", chain: chain(from: tab, via: column), connection: tab.connection)
+        openTable(t.name, where: "\(d.column(t.pk)) = \(d.literal(value.lowercased()))", chain: chain(from: tab, via: column),
+                  connection: tab.connection, label: m.label.isEmpty ? nil : m.label)
     }
 
     func chain(from tab: WorkTab, via: String?) -> [Crumb] {
@@ -321,6 +394,7 @@ final class AppState {
     // MARK: running
 
     func reload(_ tab: WorkTab) async {
+        if refCache[refKey(tab.connection)] == nil { Task { await refTables(for: tab.connection) } }
         switch tab.kind {
         case .table: await loadTable(tab)
         case .query: run(tab)
@@ -536,6 +610,13 @@ final class AppState {
                 await previewSQL(t)
                 try? await Task.sleep(for: .milliseconds(900))
             }
+        }
+        if let col = env["ROWBASE_SNAPSHOT_FOLLOW"], let t = activeTab, let r = t.result, let ci = r.columns.firstIndex(of: col),
+           let v = r.rows.first?[ci] ?? nil {  // follow the reference in row 1 of `col`
+            await refTables(for: t.connection)
+            let hint = Refs.hintColumn(for: col, in: r.columns).flatMap { r.columns.firstIndex(of: $0) }.flatMap { r.rows[0][$0] }
+            followFK(from: t, column: col, value: v, hint: hint)
+            try? await Task.sleep(for: .milliseconds(1500))
         }
         if env["ROWBASE_SNAPSHOT_SCROLL"] != nil { try? await Task.sleep(for: .seconds(25)) }  // ResultGrid.benchScroll runs meanwhile
         func render(_ w: NSWindow, to p: String) {

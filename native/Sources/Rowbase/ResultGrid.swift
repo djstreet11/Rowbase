@@ -44,7 +44,8 @@ struct ResultArea: View {
                                transpose: tab.transpose, hidden: tab.hidden,
                                explainMySQL: tab.isExplain && tab.connection.dialect == .mysql,
                                editTab: tab.isQuery ? nil : tab, pendingVersion: tab.pendingVersion, canEdit: tab.canEdit,
-                               onFollowFK: tab.isQuery ? nil : { col, val in state.followFK(from: tab, column: col, value: val) },
+                               refLinks: state.refReady.contains(state.refKey(tab.connection)),
+                               onFollowFK: { col, val, hint in state.followFK(from: tab, column: col, value: val, hint: hint) },
                                onInspect: { state.inspect(tab, row: $0) })
                     }
                 }
@@ -324,7 +325,9 @@ struct ResultGrid: NSViewRepresentable {
     var editTab: WorkTab?
     var pendingVersion = 0
     var canEdit = false
-    var onFollowFK: ((String, String) -> Void)?
+    /// Show UUID values as implicit-reference links (the database has UUID-keyed tables).
+    var refLinks = false
+    var onFollowFK: ((String, String, String?) -> Void)?
     var onInspect: (Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -401,14 +404,14 @@ struct ResultGrid: NSViewRepresentable {
         c.rowOffset = rowOffset
         c.tab = editTab
         c.update(result: result, version: version, info: info, transpose: transpose, hidden: hidden, explain: explainMySQL,
-                 pending: pendingVersion)
+                 pending: pendingVersion, refLinks: refLinks)
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
         weak var table: GridTableView?
         weak var tab: WorkTab?
-        var onFollowFK: ((String, String) -> Void)?
+        var onFollowFK: ((String, String, String?) -> Void)?
         var onInspect: ((Int) -> Void)?
         var rowOffset = 0
         private var columns: [String] = []
@@ -423,6 +426,8 @@ struct ResultGrid: NSViewRepresentable {
         private var insertCount = 0
         private var colKey = ""
         private var fkCols: Set<Int> = []
+        private var refLinks = false
+        private var pkCol = -1                // single-column PK: its own UUIDs are not links
         private var numCols: Set<Int> = []
         private var menuColumn = -1, menuRow = -1
         private var lastClickedColumn = -1
@@ -439,7 +444,8 @@ struct ResultGrid: NSViewRepresentable {
         /// Pending insert rows shown above the loaded rows (grid mode only).
         private var nIns: Int { transpose ? 0 : (tab?.inserts.count ?? 0) }
 
-        func update(result: QueryResult, version v: Int, info: TableInfo?, transpose tp: Bool, hidden: Set<String>, explain: Bool, pending: Int) {
+        func update(result: QueryResult, version v: Int, info: TableInfo?, transpose tp: Bool, hidden: Set<String>, explain: Bool, pending: Int,
+                    refLinks rl: Bool) {
             guard let tv = table else { return }
             var fk: Set<Int> = []
             var tys: [String] = []
@@ -456,7 +462,7 @@ struct ResultGrid: NSViewRepresentable {
                 if !vals.isEmpty, vals.allSatisfy({ $0.range(of: #"^-?\d+(\.\d+)?$"#, options: .regularExpression) != nil }) { num.insert(i) }
             } }
             let key = zip(result.columns, tys).map { "\($0)\u{1}\($1)" }.joined(separator: "\u{2}")
-                + "|\(fk.sorted())|N\(num.sorted())|T\(tp)|V\(visible)|E\(explain)"
+                + "|\(fk.sorted())|N\(num.sorted())|T\(tp)|V\(visible)|E\(explain)|R\(rl)"
             let dataChanged = v != version
             let pendingChanged = pending != pendingV
             guard dataChanged || key != colKey || pendingChanged else { return }
@@ -466,6 +472,8 @@ struct ResultGrid: NSViewRepresentable {
             types = tys
             rows = result.rows
             fkCols = fk
+            refLinks = rl
+            pkCol = info.flatMap { i in i.primaryKey.count == 1 ? result.columns.firstIndex(of: i.primaryKey[0]) : nil } ?? -1
             numCols = num
             vis = visible
             transpose = tp
@@ -602,6 +610,12 @@ struct ResultGrid: NSViewRepresentable {
             return ci < rows[o].count ? rows[o][ci] : nil
         }
 
+        /// Real FK column, or a UUID value in another column when implicit references are on.
+        private func isLink(_ ci: Int, _ v: String?) -> Bool {
+            guard let v else { return false }
+            return fkCols.contains(ci) || (refLinks && ci != pkCol && Refs.isUUID(v))
+        }
+
         func numberOfRows(in tableView: NSTableView) -> Int { transpose ? vis.count : nIns + rows.count }
 
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
@@ -637,7 +651,8 @@ struct ResultGrid: NSViewRepresentable {
             if let v {
                 let bad = isBad(ci, v)
                 l.font = bad ? boldFont : font
-                l.textColor = strike ? .secondaryLabelColor : (bad ? .systemOrange : (fkCols.contains(ci) ? .linkColor : .labelColor))
+                l.textColor = strike ? .secondaryLabelColor : (bad ? .systemOrange : (isLink(ci, v) ? .linkColor
+                    : v == Refs.emptyUUID ? .tertiaryLabelColor : .labelColor))
                 l.stringValue = Self.display(v)
                 let n = v.utf8.count  // O(1); String.count is O(n) and ran for every visible cell on each scroll
                 cell.toolTip = n < 24 ? nil : n > 500 ? String(v.prefix(500)) + "…" : v
@@ -699,7 +714,7 @@ struct ResultGrid: NSViewRepresentable {
                 return cell
             }
             let ci = Int(id.dropFirst()) ?? 0
-            cell.isFK = o != nil && fkCols.contains(ci)
+            cell.isFK = o.map { ci < columns.count && isLink(ci, cellValue($0, ci)) } ?? false
             cell.hover = row == (tableView as? GridTableView)?.hoverRow
             if let o {
                 style(cell, value: ci < columns.count ? cellValue(o, ci) : nil, column: ci,
@@ -753,8 +768,9 @@ struct ResultGrid: NSViewRepresentable {
             lastClickedColumn = sender.clickedColumn
             if (NSApp.currentEvent?.clickCount ?? 1) > 1 { fkToken += 1; return }
             guard let t = cellTarget(row: sender.clickedRow, column: sender.clickedColumn), !t.insert,
-                  fkCols.contains(t.col), let v = cellValue(t.row, t.col) else { return }
+                  let v = cellValue(t.row, t.col), isLink(t.col, v) else { return }
             let col = columns[t.col]
+            let hint = Refs.hintColumn(for: col, in: columns).flatMap { h in columns.firstIndex(of: h) }.flatMap { cellValue(t.row, $0) }
             if tab?.canEdit == true {
                 // double-click edits the cell: follow the link only when no second click arrives
                 fkToken += 1
@@ -762,10 +778,10 @@ struct ResultGrid: NSViewRepresentable {
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .milliseconds(Int(NSEvent.doubleClickInterval * 1000) + 40))
                     guard let self, self.fkToken == tok else { return }
-                    self.onFollowFK?(col, v)
+                    self.onFollowFK?(col, v, hint)
                 }
             } else {
-                onFollowFK?(col, v)
+                onFollowFK?(col, v, hint)
             }
         }
 

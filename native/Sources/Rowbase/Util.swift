@@ -287,3 +287,10 @@ struct SelectableText: NSViewRepresentable {
 extension NSFont {
     static func mono(_ size: CGFloat = 12) -> NSFont { .monospacedSystemFont(ofSize: size, weight: .regular) }
 }
+
+/// Closure target for NSMenuItem (keep it alive via `representedObject`).
+final class MenuAction: NSObject {
+    let fn: () -> Void
+    init(_ fn: @escaping () -> Void) { self.fn = fn }
+    @objc func run() { fn() }
+}

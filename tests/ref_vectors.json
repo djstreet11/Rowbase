@@ -1,0 +1,37 @@
+{
+  "_doc": "Implicit UUID references (no FK constraints, e.g. 1C-style schemas). Shared by Python (tests/test_refs.py) and Swift (RefsTests).",
+  "uuid": [
+    ["01a10b76-b42b-7b6e-a27a-4a33f5a8b175", true],
+    ["01A10B76-B42B-7B6E-A27A-4A33F5A8B175", true],
+    ["00000000-0000-0000-0000-000000000000", false],
+    ["01a10b76b42b7b6ea27a4a33f5a8b175", false],
+    [" 01a10b76-b42b-7b6e-a27a-4a33f5a8b175", false],
+    ["01a10b76-b42b-7b6e-a27a-4a33f5a8b17", false],
+    ["abc", false]
+  ],
+  "words": [
+    ["SenderAddress", ["sender", "address"]],
+    ["Owner_Ref", ["owner", "ref"]],
+    ["customer_uuid", ["customer", "uuid"]],
+    ["HTTPRequestID", ["http", "request", "id"]],
+    ["city2Sender", ["city2", "sender"]]
+  ],
+  "hint": [
+    {"column": "Owner_Ref", "columns": ["Ref", "Owner_TRef", "Owner_Ref"], "expect": "Owner_TRef"},
+    {"column": "Owner", "columns": ["Owner", "OwnerType"], "expect": "OwnerType"},
+    {"column": "parent_id", "columns": ["parent_id", "parent_type"], "expect": "parent_type"},
+    {"column": "SenderAddress", "columns": ["SenderAddress", "Type"], "expect": null}
+  ],
+  "candidates": [
+    {"column": "SenderAddress", "hint": null, "tables": ["CatalogAddresses", "CatalogCities", "DocumentExpressWaybill"], "expect": ["CatalogAddresses"]},
+    {"column": "CitySender", "hint": null, "tables": ["CatalogAddresses", "CatalogCities", "DocumentExpressWaybill"], "expect": ["CatalogCities"]},
+    {"column": "Owner_Ref", "hint": "Catalog.Counterparties", "tables": ["CatalogCounterparties", "CatalogOwners"], "expect": ["CatalogCounterparties"]},
+    {"column": "Owner_Ref", "hint": "Catalog.Missing", "tables": ["CatalogCounterparties", "CatalogOwners"], "expect": ["CatalogOwners"]},
+    {"column": "user_id", "hint": null, "tables": ["users", "orders", "user_roles"], "expect": ["users"]},
+    {"column": "customer_uuid", "hint": null, "tables": ["crm.customers", "customer_notes"], "expect": ["crm.customers"]},
+    {"column": "EmailAddress", "hint": null, "tables": ["CatalogAddresses", "CatalogEmailAddresses"], "expect": ["CatalogEmailAddresses"]},
+    {"column": "Address", "hint": null, "tables": ["CatalogAddresses", "CatalogEmailAddresses"], "expect": ["CatalogAddresses", "CatalogEmailAddresses"]},
+    {"column": "Parent", "hint": null, "tables": ["CatalogAddresses"], "expect": []},
+    {"column": "Ref", "hint": null, "tables": ["CatalogRefs"], "expect": []}
+  ]
+}
