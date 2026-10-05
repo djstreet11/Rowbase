@@ -89,3 +89,6 @@ short: facts and rules only, no history.
 - 2026-10-05: Native perf: user's real tables are wide (70+ cols, big text). Profile before guessing (`sample`, snapshot bench hook).
 - 2026-10-05: Auto-update design = docs/UPDATES.md (Sparkle 2 + EdDSA appcast as GitHub release asset; `rowbase update` for one-files).
   Updater output must never go to stdout of q/tables/mcp (agents parse it; MCP stdio must stay clean).
+- 2026-10-05: One-file detection = `"__compiled__" in globals()` + `__compiled__.original_argv0` (Nuitka) — verified on a real
+  build. Self-update: SHA256SUMS + `<new> --version` self-test + os.replace; web UI re-execs itself (os.execv) on the same port.
+- 2026-10-05: Don't `pkill -f <pattern>` in a Bash call whose own command line contains the pattern — it kills the shell (exit 144).
