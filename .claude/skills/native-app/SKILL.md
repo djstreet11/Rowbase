@@ -58,6 +58,9 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   in empty area, NULL capsule; editor gutter with line numbers. Keep new UI consistent with this.
 - Snapshots render the window frame (titlebar/toolbar included) + content view; toolbar/sidebar look greyed because the snapshot
   window is inactive — not a bug. `ROWBASE_SNAPSHOT_DARK=1` for dark mode (titlebar may render light: artifact, verify live).
+- NEVER give a Swift `NSCell` subclass (header/data cells) stored object properties (String, class refs): AppKit copies cells
+  with NSCopyObject (bitwise, no retain) — e.g. NSTableHeaderView's filler cell — → double release, heap corruption, crash
+  (v0.2.2 on macOS 15). Put the data in `representedObject` (see GridHeaderInfo in ResultGrid.swift).
 - NEVER use SwiftUI `.textSelection(.enabled)` — use `SelectableText` (Util.swift, AppKit NSTextField). A user crash on macOS 15.0.1
   (pointer-auth trap in CoreText while SwiftUI released selectable text whose content changed, 2026-10-05) led to this rule.
   We develop on macOS 26 — test-sensitive UI paths may behave differently on macOS 14/15; ask the user for crash reports there.

@@ -253,13 +253,24 @@ final class GridCell: NSTableCellView {
 }
 
 /// Two-line column header: name (semibold 11) with the type below in tertiary 10pt.
+/// Header model. NSCell is copied with NSCopyObject (bitwise, no retain), so a Swift NSCell subclass must NOT have
+/// stored object properties (double release → heap corruption, crashed macOS 15). Data lives in `representedObject`.
+final class GridHeaderInfo: NSObject {
+    let name: String, typeText: String, numeric: Bool, dim: Bool
+    init(name: String, typeText: String, numeric: Bool, dim: Bool) {
+        (self.name, self.typeText, self.numeric, self.dim) = (name, typeText, numeric, dim)
+    }
+}
+
 final class GridHeaderCell: NSTableHeaderCell {
-    var name = ""
-    var typeText = ""
-    var numeric = false
-    var dim = false
+    convenience init(_ info: GridHeaderInfo) {
+        self.init(textCell: info.name)
+        representedObject = info
+    }
 
     override func drawInterior(withFrame f: NSRect, in v: NSView) {
+        guard let i = representedObject as? GridHeaderInfo else { return }
+        let (name, typeText, numeric, dim) = (i.name, i.typeText, i.numeric, i.dim)
         // The header view paints a copy of the last cell over the empty filler area: only draw real columns.
         guard let hv = v as? NSTableHeaderView, hv.tableView?.tableColumns.contains(where: { $0.headerCell === self }) == true else { return }
         let ps = NSMutableParagraphStyle()
@@ -441,9 +452,7 @@ struct ResultGrid: NSViewRepresentable {
         }
 
         private func header(_ name: String, type: String, numeric: Bool, dim: Bool = false) -> GridHeaderCell {
-            let h = GridHeaderCell(textCell: name)
-            h.name = name; h.typeText = type; h.numeric = numeric; h.dim = dim
-            return h
+            GridHeaderCell(GridHeaderInfo(name: name, typeText: type, numeric: numeric, dim: dim))
         }
 
         private func textWidth(_ s: String, _ f: NSFont) -> CGFloat { (s as NSString).size(withAttributes: [.font: f]).width }
