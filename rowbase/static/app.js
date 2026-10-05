@@ -1299,6 +1299,34 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeDrawer('#rowDrawer'); closeDrawer('#histDrawer'); closePops(); }
 });
 
+// ------------------------------------------------------------------ updates (GitHub releases, see docs/UPDATES.md)
+
+async function checkUpdate() {
+  const v = await api('/api/version').catch(() => null);
+  const b = $('#updBtn');
+  b.hidden = !v?.available;
+  if (!v?.available) return;
+  b.textContent = `Update to ${v.latest}`;
+  b.title = `Rowbase ${v.latest} is available (you have ${v.current})`;
+  b.onclick = async () => {
+    if (!v.canSelfUpdate) {
+      navigator.clipboard?.writeText(v.how).catch(() => {});
+      return alert(`Rowbase ${v.latest} is available (you have ${v.current}).\n\nUpdate with:\n${v.how}\n\n(copied to the clipboard)`);
+    }
+    if (!confirm(`Update Rowbase ${v.current} → ${v.latest}?\n\nThe binary is replaced and this page reloads in a few seconds.\nRelease notes: ${v.notes_url || ''}`)) return;
+    b.disabled = true;
+    status(`Downloading Rowbase ${v.latest}…`);
+    try { await api('/api/update', {}); } catch (e) { b.disabled = false; status('Update failed'); return toast(e.message); }
+    status(`Updated to ${v.latest} — restarting…`);
+    for (let i = 0; i < 120; i++) {  // the server re-execs itself on the same port
+      await new Promise(r => setTimeout(r, 1000));
+      const n = await api('/api/version').catch(() => null);
+      if (n && n.current === v.latest) return location.reload();
+    }
+    status('Updated — restart Rowbase to finish');
+  };
+}
+
 (async function init() {
   try { await loadConns(); } catch (e) { toast(e.message); }
   const saved = store.get('tabs', []);
@@ -1306,4 +1334,5 @@ document.addEventListener('keydown', e => {
   const act = store.get('activeTab', null);
   if (App.tabs.length) activate(App.tabs.some(t => t.id === act) ? act : App.tabs[0].id);
   else renderTabbar();
+  checkUpdate();
 })();

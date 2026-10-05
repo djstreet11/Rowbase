@@ -2,6 +2,16 @@
 
 Newest on top. Format: Context | Decision | Alternatives | Consequences.
 
+## 2026-10-05 — Auto-update: Sparkle 2 for the app, `rowbase update` for one-file binaries (design, docs/UPDATES.md)
+Context: user wants the Claude/PhpStorm flow — Check for Updates → Install → relaunch. Decision: native app uses Sparkle 2
+(MIT) with an EdDSA-signed appcast published as a GitHub release asset (`releases/latest/download/appcast.xml`), update
+payload = zipped app; one-file binaries self-replace via `rowbase update` (SHA-256 from `SHA256SUMS`); pip installs only get
+the upgrade command. GitHub Releases is the single source of truth, no own server, opt-out `ROWBASE_NO_UPDATE_CHECK`.
+Alternatives: home-grown updater (re-implements atomic replace, admin auth, relaunch — rejected), Homebrew cask only (not
+one-click), Mac App Store (sandbox breaks ssh/Keychain sharing). Consequences: EdDSA private key = critical secret (GitHub
+secret + offline backup); ad-hoc builds re-prompt Keychain access after each update until Developer ID signing.
+Owner: ship before Developer ID; ask before installing until then (auto-install default on after); no beta channel.
+
 ## 2026-10-04 — Native project = pure SwiftPM, app bundle by script
 Context: no XcodeGen/Tuist installed; agents must build/test from CLI. Decision: `native/Package.swift` with RowbaseCore library +
 Rowbase executable; `scripts/bundle.sh` assembles an ad-hoc signed `Rowbase.app`; Xcode opens Package.swift directly.

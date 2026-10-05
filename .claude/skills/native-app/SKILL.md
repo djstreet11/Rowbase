@@ -69,3 +69,11 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - NEVER use SwiftUI `.textSelection(.enabled)` — use `SelectableText` (Util.swift, AppKit NSTextField). A user crash on macOS 15.0.1
   (pointer-auth trap in CoreText while SwiftUI released selectable text whose content changed, 2026-10-05) led to this rule.
   We develop on macOS 26 — test-sensitive UI paths may behave differently on macOS 14/15; ask the user for crash reports there.
+- Auto-update = Sparkle 2 (Updater.swift, docs/UPDATES.md). `AppUpdater` is inert without `SUPublicEDKey` in Info.plist (so
+  `.build/debug/Rowbase` and snapshots never check). bundle.sh copies Sparkle.framework to Contents/Frameworks, adds the rpath,
+  signs Sparkle's XPC services/Autoupdate/Updater.app → framework → app (never `--deep`). Sparkle types are `@MainActor` in Swift.
+  Verify an update end-to-end (done 2026-10-05, recipe in docs/UPDATES.md "Verified on a Mac"): old bundle copied to /tmp (keep the
+  user's /Applications app untouched), new = throwaway commit (CFBundleVersion = commit count must grow) + VERSION bump, zip with
+  `ditto -c -k --sequesterRsrc --keepParent`, `sign_update` (key in login Keychain), packaging/appcast.py, `python3 -m http.server`,
+  `defaults write dev.rowbase.Rowbase SUFeedURL http://127.0.0.1:<port>/appcast.xml` (plain-http loopback works). Cleanup: delete
+  ALL SU* defaults keys + ~/Library/Caches/dev.rowbase.Rowbase/org.sparkle-project.Sparkle, drop the commit, rebuild dist.

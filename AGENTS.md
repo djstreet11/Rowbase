@@ -87,3 +87,10 @@ short: facts and rules only, no history.
 - 2026-10-05: Implicit UUID references (no FKs, 1C-style) restored generically: rowbase/refs.py + Refs.swift + ref_vectors.json;
   the original work prototype (git show 747cd71:ui.py) resolved refs via 1C metadata — not used here.
 - 2026-10-05: Native perf: user's real tables are wide (70+ cols, big text). Profile before guessing (`sample`, snapshot bench hook).
+- 2026-10-05: Auto-update design = docs/UPDATES.md (Sparkle 2 + EdDSA appcast as GitHub release asset; `rowbase update` for one-files).
+  Updater output must never go to stdout of q/tables/mcp (agents parse it; MCP stdio must stay clean).
+- 2026-10-05: One-file detection = `"__compiled__" in globals()` + `__compiled__.original_argv0` (Nuitka) — verified on a real
+  build. Self-update: SHA256SUMS + `<new> --version` self-test + os.replace; web UI re-execs itself (os.execv) on the same port.
+- 2026-10-05: Don't `pkill -f <pattern>` in a Bash call whose own command line contains the pattern — it kills the shell (exit 144).
+- 2026-10-05: Sparkle update verified on this Mac (ad-hoc 0.2.4 → 0.2.98): works; ad-hoc builds re-trigger the Keychain prompt on first
+  connect after an update (expected until Developer ID). Running the bundled app writes SU* keys into the real dev.rowbase.Rowbase defaults.

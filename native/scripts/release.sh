@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release: app bundle → signed DMG → (optional) notarization + stapling.
+# Release: app bundle → signed DMG → (optional) notarization + stapling; plus Rowbase-<v>.zip = Sparkle update payload.
 #   ROWBASE_SIGN_IDENTITY   "Developer ID Application: Name (TEAMID)"   (security find-identity -v -p codesigning)
 #   ROWBASE_NOTARY_PROFILE  keychain profile created once with: xcrun notarytool store-credentials <profile> …
 # Without them the DMG is ad-hoc signed: fine for your own Mac, Gatekeeper will warn on other Macs.
@@ -37,4 +37,8 @@ if [[ -n "${ROWBASE_SIGN_IDENTITY:-}" ]]; then
 else
   echo "note: ROWBASE_SIGN_IDENTITY not set — ad-hoc signed DMG (local use only)" >&2
 fi
-ls -lh "$DMG" | awk '{print $5, $NF}'
+# Update payload for Sparkle (docs/UPDATES.md): zipped app, ditto keeps the code signature and symlinks intact
+ZIP="dist/Rowbase-${VERSION}.zip"
+rm -f "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent dist/Rowbase.app "$ZIP"
+ls -lh "$DMG" "$ZIP" | awk '{print $5, $NF}'

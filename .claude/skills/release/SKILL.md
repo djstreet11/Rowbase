@@ -33,6 +33,17 @@ See docs/RELEASING.md for the full guide. Key facts:
 - Watch by run id: `curl -s https://api.github.com/repos/djstreet11/Rowbase/actions/runs/<id>` (match the run id, not a text pattern
   across several runs — a pattern once matched another run's "completed").
 
+## Auto-update assets (docs/UPDATES.md)
+- release.sh also makes `native/dist/Rowbase-<v>.zip` (Sparkle payload, `ditto --keepParent`); publish job adds `SHA256SUMS`.
+- `dmg` job signs the zip with secret `SPARKLE_ED_PRIVATE_KEY` (Sparkle `sign_update --ed-key-file -`, tools pinned by
+  `SPARKLE_VERSION`) and runs `packaging/appcast.py`, merging the previous feed from `releases/latest/download/appcast.xml`.
+  No secret → warning, no appcast. `sparkle:version` = build number (`git rev-list --count HEAD`) — must keep growing.
+
+- `rowbase update` e2e (verified 2026-10-05 on a real Nuitka linux-x64 build): build twice (temporarily bump
+  `rowbase/__init__.py`, revert!), serve a fake release dir (`latest` JSON + asset + SHA256SUMS) and point
+  `ROWBASE_UPDATE_URL` at it; CLI `rowbase update -y` and the web UI button (Playwright) both swap the binary and the UI
+  re-execs on the same port. A one-file build takes ~6 min in the cloud container (no ccache).
+
 ## PyPI + MCP Registry (release.yml job `pypi`; workflow mcp-registry.yml)
 - PyPI project `rowbase-db` via Trusted Publishing (OIDC, no tokens): publisher = djstreet11/Rowbase, workflow release.yml, environment pypi.
 - MCP Registry name `io.github.djstreet11/rowbase`; ownership = GitHub OIDC + `<!-- mcp-name: io.github.djstreet11/rowbase -->` in README
