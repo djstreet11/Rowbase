@@ -38,6 +38,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
+  <!-- Sparkle auto-update (docs/UPDATES.md); public EdDSA key, private one = secret SPARKLE_ED_PRIVATE_KEY -->
+  <key>SUFeedURL</key><string>https://github.com/djstreet11/Rowbase/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>UkOKTzt1PkcCC7qWiHHgHptn0b4yowWM392/i3/yVVo=</string>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>
   <key>NSHumanReadableCopyright</key><string>© $(date +%Y) Rowbase</string>
 </dict>
 </plist>

@@ -52,7 +52,7 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 - Copy `.build/release/Sparkle.framework` → `Rowbase.app/Contents/Frameworks/`; add rpath
   `install_name_tool -add_rpath @executable_path/../Frameworks Contents/MacOS/Rowbase` (SwiftPM builds a bare executable).
 - Info.plist: `SUFeedURL` = `https://github.com/djstreet11/Rowbase/releases/latest/download/appcast.xml`,
-  `SUPublicEDKey` = public EdDSA key, `SUEnableAutomaticChecks` (unset → Sparkle asks once), `SUScheduledCheckInterval` 86400.
+  `SUPublicEDKey` = public EdDSA key (already in bundle.sh), `SUEnableAutomaticChecks` (unset → Sparkle asks once), `SUScheduledCheckInterval` 86400.
 - Signing order: sign `Sparkle.framework` (its XPC services / Autoupdate / Updater.app) first, then the app — never
   `--deep`. Not sandboxed → Sparkle's XPC installer services are not needed and can be removed from the framework copy.
 
