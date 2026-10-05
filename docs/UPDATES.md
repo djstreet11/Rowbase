@@ -4,7 +4,7 @@ Goal: the update flow users know from Claude Desktop, Antigravity and PhpStorm.
 **Check for Updates…** → "You're up to date" *or* "Rowbase 0.3.0 is available" + release notes → **Install and Relaunch**
 → download (progress) → verify → replace the app → relaunch. One click after the check, no DMG dragging, no browser.
 
-Status: step 1 (release pipeline) and step 2 (app code) implemented; CLI part is design. ADR: docs/decisions.md, "Auto-update".
+Status: implemented (pipeline, app, CLI/web); the app part still needs a first real update on a Mac. ADR: docs/decisions.md, "Auto-update".
 
 ## 1. What we update, per channel
 
@@ -90,10 +90,11 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 
 `rowbase/update.py` (stdlib only: `urllib`, `json`, `hashlib`):
 - `latest()` → `GET https://api.github.com/repos/djstreet11/Rowbase/releases/latest` (no token; 60 req/h/IP is plenty),
-  cached for 24 h in `~/.config/rowbase/update.json` (`{checked_at, latest, url}`), timeout 3 s, all errors → "unknown".
+  cached for 24 h in `~/.config/rowbase/update.json` (`{version, notes_url, assets, checked_at}`), timeout 3 s; offline →
+  last cached answer or "unknown". `ROWBASE_UPDATE_URL` overrides the endpoint (tests).
 - `install_kind()` → `onefile` (Nuitka: `__compiled__` / `sys.argv[0]` is the binary), `app` (path inside `*.app/Contents/Resources`
   → updates come from Sparkle, CLI says "update Rowbase.app"), `pipx` / `uv` / `pip` (from `sys.prefix` / installer metadata).
-- **`rowbase update [--check]`**
+- **`rowbase update [--check] [-y]`** (explicit command → ignores the opt-out)
   - `--check`: prints `Rowbase 0.2.4 → 0.3.0 available` / `up to date`; exit code 0/10 for scripts.
   - `onefile`: download the asset for this OS/arch (`rowbase-<os>-<arch>[.exe]`) next to the binary as `.new`, verify
     SHA-256 against `SHA256SUMS` from the same release (CI publishes it; later also a minisign/EdDSA signature with the
@@ -102,13 +103,13 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
     Directory not writable → print the manual command, never sudo.
   - `pipx` / `uv` / `pip` → print `pipx upgrade rowbase-db` / `uv tool upgrade rowbase-db` / `pip install -U rowbase-db`
     (we don't drive someone else's package manager).
-- Passive notice: `rowbase ui` start and `rowbase doctor` show "update available" from the cache (one line, stderr).
+- Passive notice: `rowbase doctor` prints an `updates:` line; the web UI shows a header button.
   **Never** on `q`/`tables`/`mcp` output — agents parse stdout, the MCP stdio channel must stay clean.
-- Web UI: `GET /api/version` → `{current, latest, kind, notes_url}`; header badge "Update available"; dialog with notes
-  and **[Update and restart]** for `onefile` (server downloads, swaps the binary, re-execs itself, the page reconnects
-  and reloads) or the copy-paste command for pip kinds.
-- Opt-out everywhere: `ROWBASE_NO_UPDATE_CHECK=1` or setting `updates.check=false` (shared settings file, also respected
-  by the native app's "Automatically check"). Corporate/offline users get zero network calls.
+- Web UI: `GET /api/version` → `{current, latest, available, kind, how, notes_url, canSelfUpdate}`; header button
+  "Update to X" → confirm → `POST /api/update` (`onefile`: server downloads, swaps the binary, re-execs itself on the same
+  port; the page polls /api/version and reloads) or an alert with the copy-paste command for other kinds.
+- Opt-out: `ROWBASE_NO_UPDATE_CHECK=1` or `{"updates": {"check": false}}` in settings.json (CLI/web; the native app has
+  its own Settings toggle). Corporate/offline users get zero network calls.
 
 ## 4. Privacy & safety
 - The only network request is an anonymous GET to GitHub (api.github.com / github.com release assets). No telemetry,
@@ -124,7 +125,8 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
    `SPARKLE_ED_PRIVATE_KEY` exists (docs/RELEASING.md → "Auto-update key").
 2. 🟡 **App** (code done, needs a Mac run): Sparkle + menu item + Settings pane (native/Sources/Rowbase/Updater.swift); release N ships the updater, release N+1 is the first real auto-update
    (users on versions without Sparkle must download the DMG once more — say so in N's release notes).
-3. **CLI**: `rowbase update`, `/api/version`, web banner.
+3. ✅ **CLI**: `rowbase update [--check] [-y]`, `rowbase --version`, `doctor` line, `/api/version` + `/api/update`, header
+   button "Update to X" in the web UI (rowbase/update.py, tests/test_update.py).
 4. Developer ID + notarization → removes the Keychain re-prompt and Gatekeeper warnings.
 5. Later: delta updates (`generate_appcast` creates them automatically), phased rollout
    (`sparkle:phasedRolloutInterval`), critical-update flag for security fixes.

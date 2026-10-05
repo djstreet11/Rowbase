@@ -56,7 +56,9 @@ pyproject.toml  deps (all pure Python): PyMySQL, pg8000, keyring · packaging/ o
 
 ### 2.4 HTTP API (header `X-Rowbase: 1`, Host must be localhost)
 GET `/api/conns`, `/api/tables?conn`, `/api/table?conn&name` → `{name, quoted, driver, columns[{…, fk}], indexes, referencedBy}`,
-`/api/history?limit&conn`. POST `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`.
+`/api/history?limit&conn`, `/api/version[?force=1]` → `{current, latest, available, kind, how, notes_url, canSelfUpdate}`.
+POST `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`, `/api/update` (one-file
+binary: swap + re-exec on the same port).
 History: `~/.config/rowbase/history.jsonl` (last 2000 entries).
 
 ### 2.5 Web UI features

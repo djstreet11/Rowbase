@@ -47,6 +47,10 @@ Grab the latest from **[Releases](https://github.com/djstreet11/Rowbase/releases
 Started without arguments, the one-file app opens the web UI in your browser. Builds are not code-signed yet:
 macOS → *System Settings → Privacy & Security → Open Anyway*; Windows → *More info → Run anyway*.
 
+**Updates.** The Mac app: *Rowbase → Check for Updates…* (from 0.3.0). One-file binaries: `rowbase update`, or the
+*Update* button in the web UI. PyPI installs: `pipx upgrade rowbase-db`. The only request is an anonymous check of
+GitHub Releases, at most once a day — no telemetry; turn it off with `ROWBASE_NO_UPDATE_CHECK=1`.
+
 ## Connect your AI assistant (MCP)
 Open **AI / MCP** in the app, click **Copy prompt**, paste it into your assistant — it registers the server, reads the
 built-in guide and creates a reusable skill. Or register manually:
@@ -75,6 +79,7 @@ rowbase q "SELECT * FROM orders WHERE status = 'new'" -c shop --format json
 rowbase ui        # web UI on http://127.0.0.1:8765
 rowbase mcp       # MCP server (stdio)
 rowbase doctor    # environment report
+rowbase update    # update a one-file binary in place (--check: only check)
 ```
 
 <details><summary>Dark mode</summary><img src="https://raw.githubusercontent.com/djstreet11/Rowbase/main/docs/assets/dark.png" alt="Dark mode"></details>

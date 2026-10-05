@@ -11,7 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import edit, engine, export, refs, store
+from . import edit, engine, export, refs, store, update
 from .guard import QueryError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -163,6 +163,20 @@ def run_edit(body):
     return res
 
 
+def version_info(force=False):
+    if update.disabled() and not force:
+        return {"current": update.__version__, "latest": None, "available": False, "disabled": True}
+    return update.check(force)
+
+
+def run_update(port):
+    """Swap the one-file binary, then re-exec it on the same port (the page polls /api/version and reloads)."""
+    v = update.self_update()
+    exe = update.executable()
+    threading.Timer(0.3, lambda: os.execv(exe, [exe, "ui", "--port", str(port), "--no-open"])).start()
+    return {"ok": True, "version": v}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "rowbase"
 
@@ -187,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_api(self, fn):
         try:
             return self.send(200, fn())
-        except (QueryError, ValueError, KeyError) as e:
+        except (QueryError, ValueError, KeyError, RuntimeError) as e:
             return self.send(400, {"error": str(e) if not isinstance(e, KeyError) else f"Missing field {e}"})
         except Exception as e:
             return self.send(500, {"error": f"{type(e).__name__}: {e}"})
@@ -210,6 +224,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings": store.settings,
             "/api/mcp/config": lambda: __import__("rowbase.mcp", fromlist=["mcp"]).client_config(),
             "/api/history": lambda: history_read(int(p.get("limit") or 500), p.get("conn") and ref(p["conn"])[0]),
+            "/api/version": lambda: version_info(p.get("force") == "1"),
             "/api/reftables": lambda: {"count": len(refs.ref_tables(conn_for(p["conn"], p.get("db"))))},
         }
         if url.path in routes:
@@ -244,6 +259,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/conns/test": lambda: conn_test(body),
             "/api/edit": lambda: run_edit(body),
             "/api/settings": lambda: store.save_settings(body),
+            "/api/update": lambda: run_update(self.server.server_address[1]),
             "/api/refresh": lambda: drop_cache(body.get("conn")) or {"ok": True},
             "/api/resolve": lambda: refs.resolve(conn_for(body["conn"], body.get("db")), body.get("value") or "",
                                                  body.get("table"), body.get("column"), body.get("hint")),

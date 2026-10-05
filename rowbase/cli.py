@@ -1,7 +1,7 @@
 """rowbase — database client CLI for humans and agents (read-only by default).
 
     rowbase add NAME URL [--rw] [--env prod]   # mysql://u@host/db, postgres://u@host/db, sqlite:///path.db
-    rowbase conns | ping | tables [PATTERN] | desc TABLE [--indexes] | q "SELECT …" | ui
+    rowbase conns | ping | tables [PATTERN] | desc TABLE [--indexes] | q "SELECT …" | ui | update
 Passwords: from the URL, a prompt, or --password-stdin; stored in the OS keychain, never printed.
 """
 import argparse
@@ -9,7 +9,7 @@ import getpass
 import os
 import sys
 
-from . import engine, store
+from . import __version__, engine, store
 from .guard import QueryError
 
 
@@ -115,6 +115,33 @@ def cmd_doctor(args):
             print(f"driver {mod}: MISSING ({e})")
     import shutil
     print(f"ssh client: {shutil.which('ssh') or 'not found (SSH tunnels unavailable)'}")
+    from . import update
+    st = update.check() if not update.disabled() else None
+    print("updates:    " + ("check disabled" if st is None else f"{st['latest']} available → {st['how']}" if st["available"]
+                            else "up to date" if st["latest"] else "unknown (offline)") + f" [{update.install_kind()}]")
+
+
+def cmd_update(args):
+    from . import update
+    st = update.check(force=True, timeout=10)
+    if not st["latest"]:
+        sys.exit("Could not reach GitHub to check for updates (offline or rate-limited) — try again later.")
+    if not st["available"]:
+        print(f"Rowbase {st['current']} is up to date.")
+        return
+    print(f"Rowbase {st['latest']} is available (you have {st['current']}). Release notes: {st['notes_url']}")
+    if args.check:
+        sys.exit(10)  # scripts: 0 = up to date, 10 = update available
+    if st["kind"] != "onefile":
+        print(f"Update with: {st['how']}")
+        return
+    if not args.yes and sys.stdin.isatty() and input("Update now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+        return
+    try:
+        v = update.self_update(log=print)
+    except RuntimeError as e:
+        sys.exit(str(e))
+    print(f"Updated to {v}. Restart running Rowbase windows/servers; AI assistants pick it up on their next session.")
 
 
 def cmd_mcp(args):
@@ -149,6 +176,8 @@ def _utf8_stdio():
 
 def main(argv=None):
     _utf8_stdio()
+    from . import update
+    update.cleanup()
     p = argparse.ArgumentParser(prog="rowbase", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-c", "--conn", default=os.environ.get("ROWBASE_CONN"), help="connection name or id (see `conns`)")
@@ -158,6 +187,7 @@ def main(argv=None):
     common.add_argument("--width", type=int, default=60, help="max cell width in table format")
     common.add_argument("--timeout", type=int, default=30, help="statement timeout, seconds")
     common.add_argument("--out", help="write the full result to a file (.json -> JSON)")
+    p.add_argument("-V", "--version", action="version", version=f"rowbase {__version__}")
     sub = p.add_subparsers(dest="cmd")
     sub.add_parser("conns", help="list saved connections").set_defaults(fn=cmd_conns)
     s = sub.add_parser("add", help="save a connection from a URL")
@@ -181,6 +211,9 @@ def main(argv=None):
     s.add_argument("--print-config", action="store_true", help="print client setup snippets and the setup prompt")
     s.add_argument("--json", action="store_true", help="with --print-config: machine-readable output")
     s.set_defaults(fn=cmd_mcp)
+    s = sub.add_parser("update", help="check for a new version and update this binary")
+    s.add_argument("--check", action="store_true", help="only check (exit code 10 = update available)")
+    s.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation"); s.set_defaults(fn=cmd_update)
     s = sub.add_parser("ui", help="start the local web UI")
     s.add_argument("--port", type=int, default=8765); s.add_argument("--no-open", action="store_true"); s.set_defaults(fn=cmd_ui)
     argv = sys.argv[1:] if argv is None else argv
