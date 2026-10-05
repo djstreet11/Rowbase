@@ -87,3 +87,5 @@ short: facts and rules only, no history.
 - 2026-10-05: Implicit UUID references (no FKs, 1C-style) restored generically: rowbase/refs.py + Refs.swift + ref_vectors.json;
   the original work prototype (git show 747cd71:ui.py) resolved refs via 1C metadata — not used here.
 - 2026-10-05: Native perf: user's real tables are wide (70+ cols, big text). Profile before guessing (`sample`, snapshot bench hook).
+- 2026-10-05: Auto-update design = docs/UPDATES.md (Sparkle 2 + EdDSA appcast as GitHub release asset; `rowbase update` for one-files).
+  Updater output must never go to stdout of q/tables/mcp (agents parse it; MCP stdio must stay clean).

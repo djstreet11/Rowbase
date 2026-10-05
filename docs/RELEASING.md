@@ -32,4 +32,4 @@ Ad-hoc builds run on this Mac. On other Macs Gatekeeper blocks them (right-click
 - App icon is code: `swift native/scripts/make-icon.swift` (from `native/`) regenerates `Resources/AppIcon.icns` + `AppIcon-1024.png`.
 
 ## Later
-- Auto-update (Sparkle with EdDSA-signed appcast), universal binary (`--arch arm64 --arch x86_64`) if Intel support is wanted.
+- Auto-update (Sparkle with EdDSA-signed appcast) — design in docs/UPDATES.md, universal binary (`--arch arm64 --arch x86_64`) if Intel support is wanted.

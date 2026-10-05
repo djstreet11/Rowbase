@@ -172,7 +172,7 @@ Deferred; keep contracts (§5) portable.
 | 1b — Python polish | query cancel, SSH tunnel, CSV/SQL export, server-side sort, virtualized grid, i18n (en/ru/uk) | next |
 | 2 — Native MVP | Swift app: connection manager (Keychain), MySQL+PG+SQLite, sidebar, virtualized grid, SQL editor, history, guard | ✅ 2026-10-04 |
 | 3 — Native parity+ | autocomplete, FK navigation, transpose, inspector, export, editing w/ pending changes, SSH, command palette | |
-| 4 — Ship | signing/notarization, DMG, auto-update, onboarding, import from TablePlus | 🟡 DMG + pipeline 2026-10-04; needs Developer ID |
+| 4 — Ship | signing/notarization, DMG, auto-update ([design](docs/UPDATES.md)), onboarding, import from TablePlus | 🟡 DMG + pipeline 2026-10-04; needs Developer ID |
 | 5 — Beyond | ER diagrams, AI assistant, MCP server, Linux/Windows | |
 
 ## 7. Open questions
@@ -187,3 +187,5 @@ Deferred; keep contracts (§5) portable.
 - Native app embeds the macOS one-file binary (Contents/Resources/rowbase) → identical MCP server; AI / MCP sheet.
 - MCP server: tools guide/connections/databases/tables/describe/search_schema/sample/count/query/explain (+apply_changes when
   allowed), TOON output, knowledge-base guide + resources + prompts, settings shared by CLI/web/native — docs/MCP.md.
+- Updates (design, docs/UPDATES.md): app = Sparkle 2 + EdDSA appcast on GitHub Releases; one-file binaries = `rowbase update`;
+  pip installs = upgrade hint; no telemetry, opt-out `ROWBASE_NO_UPDATE_CHECK=1`.
