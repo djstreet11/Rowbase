@@ -98,7 +98,9 @@ import Testing
         #expect(!all.contains { $0.name.lowercased().hasSuffix("plain") })
         let m = try await engine.resolveRef(c, value: Self.addr.uppercased(), candidates: [], all: all)
         // an empty Description falls back to the next label column
-        #expect(m == [RefMatch(table: table, label: d == .postgres ? "Kyiv, warehouse 4" : "K-7")])
+        #expect(m.contains(RefMatch(table: table, label: d == .postgres ? "Kyiv, warehouse 4" : "K-7")))  // other suites may hold copies
+        // candidates are searched first: a hit there skips the full scan
+        #expect(try await engine.resolveRef(c, value: Self.addr, candidates: [t], all: all) == [RefMatch(table: table, label: m.first { $0.table == table }?.label ?? "")])
         #expect(try await engine.resolveRef(c, value: "00000000-0000-0000-0000-000000000001", candidates: [t], all: all).isEmpty)
         if d == .mysql {
             #expect(try await engine.resolveRef(c, value: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", candidates: [], all: all)
