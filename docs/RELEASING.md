@@ -23,6 +23,18 @@ Ad-hoc builds run on this Mac. On other Macs Gatekeeper blocks them (right-click
    The script signs the app with the hardened runtime (`native/Rowbase.entitlements`), builds the DMG, signs it,
    submits it to Apple's notary service, waits, staples the ticket and runs `spctl --assess`.
 
+## Auto-update key (Sparkle EdDSA) — one-time, done by the developer
+Each tagged release publishes `Rowbase-<v>.zip`, `SHA256SUMS` and — once this key exists — `appcast.xml` (docs/UPDATES.md).
+1. Download the Sparkle tools (same version as `SPARKLE_VERSION` in .github/workflows/release.yml), e.g.
+   `curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz | tar xJ -C ~/sparkle`.
+2. `~/sparkle/bin/generate_keys` → stores the private key in your login Keychain and prints the **public** key
+   (goes into Info.plist `SUPublicEDKey` when the app gets Sparkle — it is public, safe to commit).
+3. `~/sparkle/bin/generate_keys -x sparkle-private.txt` → GitHub → Settings → Secrets and variables → Actions →
+   New repository secret `SPARKLE_ED_PRIVATE_KEY` = file content → `rm sparkle-private.txt`.
+4. Back up the private key (password manager). **Losing it means installed apps can never auto-update again.**
+   Never paste it into chats, issues or logs.
+Without the secret the release still succeeds; the `dmg` job only warns that no appcast was produced.
+
 ## Versioning
 - One version everywhere: `rowbase/__init__.py`, `pyproject.toml`, `native/VERSION`, `server.json` (twice).
   Build number of the app = `git rev-list --count HEAD`.

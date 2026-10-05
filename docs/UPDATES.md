@@ -4,7 +4,7 @@ Goal: the update flow users know from Claude Desktop, Antigravity and PhpStorm.
 **Check for Updates…** → "You're up to date" *or* "Rowbase 0.3.0 is available" + release notes → **Install and Relaunch**
 → download (progress) → verify → replace the app → relaunch. One click after the check, no DMG dragging, no browser.
 
-Status: design (not implemented). ADR: docs/decisions.md, "Auto-update".
+Status: step 1 (release pipeline) implemented; app/CLI parts are design. ADR: docs/decisions.md, "Auto-update".
 
 ## 1. What we update, per channel
 
@@ -119,15 +119,19 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 - Downgrade is manual (old DMG / binary from Releases).
 
 ## 5. Rollout plan
-1. **Pipeline first** (no user-visible change): `Rowbase-<v>.zip`, `SHA256SUMS`, `appcast.xml` as release assets.
+1. ✅ **Pipeline first** (no user-visible change): `Rowbase-<v>.zip` (native/scripts/release.sh), `SHA256SUMS`, `appcast.xml`
+   (packaging/appcast.py, tests/test_appcast.py) as release assets. appcast.xml appears once the secret
+   `SPARKLE_ED_PRIVATE_KEY` exists (docs/RELEASING.md → "Auto-update key").
 2. **App**: Sparkle + menu item + Settings pane; release N ships the updater, release N+1 is the first real auto-update
    (users on versions without Sparkle must download the DMG once more — say so in N's release notes).
 3. **CLI**: `rowbase update`, `/api/version`, web banner.
 4. Developer ID + notarization → removes the Keychain re-prompt and Gatekeeper warnings.
-5. Later: beta channel, delta updates (`generate_appcast` creates them automatically), phased rollout
+5. Later: delta updates (`generate_appcast` creates them automatically), phased rollout
    (`sparkle:phasedRolloutInterval`), critical-update flag for security fixes.
 
-## 6. Open questions for the owner
-- Default "Automatically download and install": off (PhpStorm-like: ask) or on (Claude Desktop-like: silent, applied on restart)?
-- Ship auto-update before the Developer ID (accepting the Keychain re-prompt) or wait for it?
-- Beta channel needed from day one?
+## 6. Decisions (owner, 2026-10-05)
+- **Ask before installing** while builds are ad-hoc: "Automatically download and install" defaults to **off**
+  (PhpStorm-like). Once releases are Developer ID-signed + notarized → default **on** (Claude Desktop-like: downloaded
+  silently, applied on quit/relaunch); the Settings toggle stays.
+- **Ship auto-update before the Developer ID** — the Keychain re-prompt after an update is accepted for now.
+- **No beta channel** — one feed, stable releases only.
