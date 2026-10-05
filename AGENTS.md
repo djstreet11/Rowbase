@@ -92,3 +92,5 @@ short: facts and rules only, no history.
 - 2026-10-05: One-file detection = `"__compiled__" in globals()` + `__compiled__.original_argv0` (Nuitka) — verified on a real
   build. Self-update: SHA256SUMS + `<new> --version` self-test + os.replace; web UI re-execs itself (os.execv) on the same port.
 - 2026-10-05: Don't `pkill -f <pattern>` in a Bash call whose own command line contains the pattern — it kills the shell (exit 144).
+- 2026-10-05: Sparkle update verified on this Mac (ad-hoc 0.2.4 → 0.2.98): works; ad-hoc builds re-trigger the Keychain prompt on first
+  connect after an update (expected until Developer ID). Running the bundled app writes SU* keys into the real dev.rowbase.Rowbase defaults.

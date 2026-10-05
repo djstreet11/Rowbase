@@ -4,7 +4,7 @@ Goal: the update flow users know from Claude Desktop, Antigravity and PhpStorm.
 **Check for Updates…** → "You're up to date" *or* "Rowbase 0.3.0 is available" + release notes → **Install and Relaunch**
 → download (progress) → verify → replace the app → relaunch. One click after the check, no DMG dragging, no browser.
 
-Status: implemented (pipeline, app, CLI/web); the app part still needs a first real update on a Mac. ADR: docs/decisions.md, "Auto-update".
+Status: implemented (pipeline, app, CLI/web); app update verified end-to-end on a real Mac (2026-10-05, §2 "Verified on a Mac"). ADR: docs/decisions.md, "Auto-update".
 
 ## 1. What we update, per channel
 
@@ -83,8 +83,21 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
   so no Gatekeeper dialog), but every build has a new code identity → macOS **re-asks Keychain access for saved
   passwords after each update** ("Rowbase wants to use your confidential information… Always Allow"). Acceptable for
   early adopters; one more reason to get the Developer ID before advertising auto-update.
-- Must be verified on a real Mac before shipping: update 0.x(ad-hoc) → 0.y(ad-hoc), and later ad-hoc → Developer ID
+- ✅ Verified ad-hoc → ad-hoc (below). Still to verify once the certificate exists: ad-hoc → Developer ID
   (Sparkle allows it when the EdDSA signature is valid; confirm with the shipped Sparkle version).
+
+### Verified on a Mac (2026-10-05, macOS 26, Sparkle 2.10.0, ad-hoc)
+- `bash native/scripts/bundle.sh`: Sparkle.framework in Contents/Frameworks with intact symlinks (`Versions/Current → B`),
+  rpath `@executable_path/../Frameworks` present, `codesign --verify --deep --strict` passes, Info.plist has
+  SUFeedURL / SUPublicEDKey / SUScheduledCheckInterval / SUAutomaticallyUpdate=false. App launches from the bundle, no dyld errors.
+- App menu "Check for Updates…" under "About Rowbase" and Settings (⌘,) → Updates render correctly.
+- End-to-end: 0.2.4 (build 64) → 0.2.98 (build 65) from a local feed: zip from `ditto -c -k --sequesterRsrc --keepParent`,
+  `sign_update` with the login-Keychain key, `packaging/appcast.py`, `python3 -m http.server`, feed overridden via
+  `defaults write dev.rowbase.Rowbase SUFeedURL http://127.0.0.1:8977/appcast.xml` (Sparkle accepted the plain-http loopback
+  feed — no workaround needed). Check → Install Update → Install and Relaunch → relaunched as 0.2.98, signature valid,
+  connections.json untouched. **Keychain re-asked access on the first connect** (expected for ad-hoc).
+- Local test leaves SU* keys in `defaults read dev.rowbase.Rowbase` and a cache in
+  `~/Library/Caches/dev.rowbase.Rowbase/org.sparkle-project.Sparkle` — delete both afterwards.
 
 ## 3. Python track — one-file binaries, PyPI, web UI
 
@@ -123,7 +136,7 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
 1. ✅ **Pipeline first** (no user-visible change): `Rowbase-<v>.zip` (native/scripts/release.sh), `SHA256SUMS`, `appcast.xml`
    (packaging/appcast.py, tests/test_appcast.py) as release assets. appcast.xml appears once the secret
    `SPARKLE_ED_PRIVATE_KEY` exists (docs/RELEASING.md → "Auto-update key").
-2. 🟡 **App** (code done, needs a Mac run): Sparkle + menu item + Settings pane (native/Sources/Rowbase/Updater.swift); release N ships the updater, release N+1 is the first real auto-update
+2. ✅ **App** (verified on a Mac 2026-10-05): Sparkle + menu item + Settings pane (native/Sources/Rowbase/Updater.swift); release N ships the updater, release N+1 is the first real auto-update
    (users on versions without Sparkle must download the DMG once more — say so in N's release notes).
 3. ✅ **CLI**: `rowbase update [--check] [-y]`, `rowbase --version`, `doctor` line, `/api/version` + `/api/update`, header
    button "Update to X" in the web UI (rowbase/update.py, tests/test_update.py).
