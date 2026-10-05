@@ -58,6 +58,11 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   in empty area, NULL capsule; editor gutter with line numbers. Keep new UI consistent with this.
 - Snapshots render the window frame (titlebar/toolbar included) + content view; toolbar/sidebar look greyed because the snapshot
   window is inactive — not a bug. `ROWBASE_SNAPSHOT_DARK=1` for dark mode (titlebar may render light: artifact, verify live).
+- Grid performance (wide tables, 70+ columns): NSTableView creates cell views for ALL columns of every visible row (prepared
+  rect = full width; prepareContent override and responsive-scrolling opt-out don't change it). So GridCell must stay cheap:
+  frame layout in `layout()` (NO Auto Layout constraints — they made CoreAutoLayout eat ~100% CPU), NULL pill / FK arrow created
+  lazily, layer only when tinted, display text = short prefix (Refs/ResultGrid `display`), O(1) `utf8.count` checks.
+  Measure with `ROWBASE_SNAPSHOT_SCROLL=N` (prints ms per scroll step; `.scratch-home/wide.db` style fixture) + `sample <pid>`.
 - NEVER give a Swift `NSCell` subclass (header/data cells) stored object properties (String, class refs): AppKit copies cells
   with NSCopyObject (bitwise, no retain) — e.g. NSTableHeaderView's filler cell — → double release, heap corruption, crash
   (v0.2.2 on macOS 15). Put the data in `representedObject` (see GridHeaderInfo in ResultGrid.swift).

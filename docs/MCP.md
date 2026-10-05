@@ -33,6 +33,7 @@ claude mcp add rowbase -- /path/to/rowbase mcp                       # Claude Co
 | `sample` / `count` | First rows / row count with optional WHERE |
 | `query` | One SQL statement, auto-LIMIT, `truncated` flag |
 | `explain` | Execution plan (`analyze` optional) |
+| `find_ref` | Which table holds a UUID as its primary key (references without FKs, e.g. 1C-style schemas) |
 | `apply_changes` | Only when writes are allowed |
 
 Tool sets: **full** (all above) or **minimal** (`guide`, `connections`, `tables`, `describe`, `query`) for small contexts.

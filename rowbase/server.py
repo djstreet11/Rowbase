@@ -11,7 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import edit, engine, export, store
+from . import edit, engine, export, refs, store
 from .guard import QueryError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -47,6 +47,7 @@ def drop_cache(conn_id=None):
         for k in [k for k in _cache if conn_id is None or k[1] == conn_id]:
             del _cache[k]
     engine.reset_pool(conn_id)
+    refs.clear()
 
 
 # ---------------------------------------------------------------- history
@@ -209,6 +210,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings": store.settings,
             "/api/mcp/config": lambda: __import__("rowbase.mcp", fromlist=["mcp"]).client_config(),
             "/api/history": lambda: history_read(int(p.get("limit") or 500), p.get("conn") and ref(p["conn"])[0]),
+            "/api/reftables": lambda: {"count": len(refs.ref_tables(conn_for(p["conn"], p.get("db"))))},
         }
         if url.path in routes:
             return self.handle_api(routes[url.path])
@@ -243,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/edit": lambda: run_edit(body),
             "/api/settings": lambda: store.save_settings(body),
             "/api/refresh": lambda: drop_cache(body.get("conn")) or {"ok": True},
+            "/api/resolve": lambda: refs.resolve(conn_for(body["conn"], body.get("db")), body.get("value") or "",
+                                                 body.get("table"), body.get("column"), body.get("hint")),
         }
         if url.path in routes:
             return self.handle_api(routes[url.path])

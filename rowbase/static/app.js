@@ -588,10 +588,12 @@ function visibleCols(t) {
   return r.cols.map((c, i) => i).filter(i => !hidden.has(r.cols[i]));
 }
 
-function cellHtml(v, ci, ri, fk) {
+function cellHtml(v, ci, ri, fk, uref) {
   if (v === null) return '<span class="null">NULL</span>';
   const s = String(v), h = esc(s.length > 300 ? s.slice(0, 300) + '…' : s);
-  return fk ? `<span class="ref" data-ci="${ci}" data-ri="${ri}" title="Open ${esc(fk.table)}.${esc(fk.column)} in a new tab">${h}</span>` : h;
+  if (fk) return `<span class="ref" data-ci="${ci}" data-ri="${ri}" title="Open ${esc(fk.table)}.${esc(fk.column)} in a new tab">${h}</span>`;
+  if (s === EMPTY_REF) return `<span class="eref" title="Empty reference">${h}</span>`;
+  return uref && isUUID(s) ? `<span class="ref" data-ci="${ci}" data-ri="${ri}" title="Find the referenced object">${h}</span>` : h;
 }
 
 function renderResult(t) {
@@ -606,6 +608,7 @@ function renderResult(t) {
   const meta = t.type === 'table' ? Schema.sync(t.conn, t.table) : null;
   const fkOf = name => meta?.columns.find(c => c.name === name)?.fk || null;
   const typeOf = name => meta?.columns.find(c => c.name === name)?.type || '';
+  const urefOf = urefCheck(t, meta);
   const off = t.type === 'table' ? t.offset : 0;
   const typeI = r.explain ? r.cols.indexOf('type') : -1, rowsI = r.explain ? r.cols.indexOf('rows') : -1;
   const badRow = row => typeI >= 0 && row[typeI] === 'ALL';
@@ -613,7 +616,7 @@ function renderResult(t) {
   if (t.mode === 'transpose') {
     const head = '<th class="fld">Field</th>' + r.rows.map((_, ri) => `<th class="rn" data-row="${ri}" title="All fields of the row">${off + ri + 1}</th>`).join('');
     const body = idx.map(i => `<tr><th class="fld" title="${esc(typeOf(r.cols[i]))}">${esc(r.cols[i])}</th>${r.rows.map((row, ri) =>
-      `<td class="${badCell(row, i) ? 'bad' : ''}">${cellHtml(row[i], i, ri, fkOf(r.cols[i]))}</td>`).join('')}</tr>`).join('');
+      `<td class="${badCell(row, i) ? 'bad' : ''}">${cellHtml(row[i], i, ri, fkOf(r.cols[i]), urefOf(r.cols[i]))}</td>`).join('')}</tr>`).join('');
     el.innerHTML = `<table class="grid tp"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + (r.rows.length ? '' : '<div class="empty">Empty</div>');
     return;
   }
@@ -625,7 +628,7 @@ function renderResult(t) {
   const head = '<th class="rn">#</th>' + idx.map(i => `<th data-sort="${i}" title="${esc(typeOf(r.cols[i]))}">${esc(r.cols[i])}${s && s.i === i ? (s.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('');
   const body = insRows + r.rows.map((row, ri) => `<tr class="${badRow(row) ? 'bad' : ''}${del.has(ri) ? ' deleted' : ''}"><td class="rn" data-row="${ri}" title="All fields of the row">${off + ri + 1}</td>${idx.map(i => {
     const v = shown(row, ri, i), ed = edits[ri] && r.cols[i] in edits[ri];
-    return `<td class="${badCell(row, i) ? 'bad' : ''}${ed ? ' edited' : ''}" data-c="${i}" data-r="${ri}" title="${v === null ? '' : esc(String(v).slice(0, 500))}">${cellHtml(v, i, ri, ed ? null : fkOf(r.cols[i]))}</td>`;
+    return `<td class="${badCell(row, i) ? 'bad' : ''}${ed ? ' edited' : ''}" data-c="${i}" data-r="${ri}" title="${v === null ? '' : esc(String(v).slice(0, 500))}">${cellHtml(v, i, ri, ed ? null : fkOf(r.cols[i]), !ed && urefOf(r.cols[i]))}</td>`;
   }).join('')}</tr>`).join('');
   el.innerHTML = `<table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` + (r.rows.length || insRows ? '' : '<div class="empty">Empty</div>');
 }
@@ -650,7 +653,7 @@ function gridClick(t, e) {
   const rn = e.target.closest('[data-row]');
   if (rn) return openRow(t, +rn.dataset.row);
   const ref = e.target.closest('.ref');
-  if (ref) return followFk(t, +ref.dataset.ri, +ref.dataset.ci);
+  if (ref) return followFk(t, +ref.dataset.ri, +ref.dataset.ci, ref);
 }
 
 function updateColsBtn(t) {
@@ -712,11 +715,64 @@ function colPicker(t, anchor) {
 // ------------------------------------------------------------------ foreign keys
 
 const crumbOf = (t, via) => ({tabId: t.id, table: t.type === 'table' ? t.table : null, where: t.where, title: tabTitle(t), via});
-function followFk(t, ri, ci) {
+function followFk(t, ri, ci, anchor) {
   const r = t.res, col = r.cols[ci], v = r.rows[ri][ci];
   const fk = t.type === 'table' ? Schema.sync(t.conn, t.table)?.columns.find(c => c.name === col)?.fk : null;
-  if (!fk || v === null) return;
+  if (v === null) return;
+  if (!fk) return isUUID(String(v)) && followRef(t, ri, ci, anchor);
   openTable(fk.table, {where: `${quoteId(driverOf(t.conn), fk.column)} = ${sqlLit(v)}`, chain: [...t.chain, crumbOf(t, col)], conn: t.conn});
+}
+
+// ------------------------------------------------------------------ implicit UUID references (contract: rowbase/refs.py)
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, EMPTY_REF = '00000000-0000-0000-0000-000000000000';
+const isUUID = s => UUID_RE.test(s) && s !== EMPTY_REF;
+const RefsOn = {};
+/** Does the connection's database have UUID-keyed tables? Loads once, re-renders that connection's tabs when known. */
+function refsOn(conn) {
+  if (!(conn in RefsOn)) {
+    RefsOn[conn] = false;
+    api('/api/reftables?conn=' + enc(conn)).then(r => {
+      if (!r.count) return;
+      RefsOn[conn] = true;
+      App.tabs.filter(x => x.conn === conn && x.res).forEach(renderResult);
+    }).catch(() => {});
+  }
+  return RefsOn[conn];
+}
+/** name -> link UUID values of this column? (not the table's own single-column primary key) */
+function urefCheck(t, meta) {
+  if (!refsOn(t.conn)) return () => false;
+  const pk = (meta?.columns || []).filter(c => c.key === 'PRI').map(c => c.name);
+  return name => !(pk.length === 1 && pk[0] === name);
+}
+/** Sibling column naming the target type (Owner_Ref -> Owner_TRef, parent_id -> parent_type); see refs.hint_column. */
+function hintColumn(col, cols) {
+  const base = col.replace(/(_Ref|_ref|_REF|_id|_Id|_ID|_uuid)$/, '');
+  for (const s of ['_TRef', '_Type', 'TRef', 'Type']) {
+    const c = cols.find(x => x.toLowerCase() === (base + s).toLowerCase());
+    if (c && c !== col) return c;
+  }
+  return null;
+}
+async function followRef(t, ri, ci, anchor) {
+  const r = t.res, col = r.cols[ci], value = String(r.rows[ri][ci]).toLowerCase();
+  const hc = hintColumn(col, r.cols), hint = hc ? r.rows[ri][r.cols.indexOf(hc)] : null;
+  status('Looking up ' + value + '…');
+  try {
+    const res = await api('/api/resolve', {conn: t.conn, value, table: t.type === 'table' ? t.table : null, column: col, hint});
+    if (!res.matches.length) { status('Not found'); return toast(`${value} not found in ${res.searched ?? 0} tables with a UUID key`); }
+    status(`Found (${res.how})`);
+    const open = m => openTable(m.table, {where: `${quoteId(driverOf(t.conn), m.pk)} = ${sqlLit(value)}`, chain: [...t.chain, crumbOf(t, col)],
+      conn: t.conn, label: m.label});
+    if (res.matches.length === 1) return open(res.matches[0]);
+    closePops();
+    const p = document.createElement('div');
+    p.className = 'pop menu';
+    p.innerHTML = res.matches.map((m, i) => `<div data-i="${i}"><b>${esc(m.table)}</b><small>${esc(m.label)}</small></div>`).join('');
+    p.onclick = e => { const d = e.target.closest('[data-i]'); if (d) { p.remove(); open(res.matches[+d.dataset.i]); } };
+    placePop(p, anchor || $('.result', t.el));
+  } catch (e) { status('Error'); toast(e.message); }
 }
 
 // ------------------------------------------------------------------ editing (contract: rowbase/edit.py)
@@ -870,12 +926,13 @@ function renderRow() {
   const {t, ri} = rowCtx, r = t.res, f = $('#rowFilter').value.trim().toLowerCase();
   const meta = t.type === 'table' ? Schema.sync(t.conn, t.table) : null;
   const fkOf = name => meta?.columns.find(x => x.name === name)?.fk || null;
+  const urefOf = urefCheck(t, meta);
   const rb = (meta?.referencedBy || []).map((x, k) => ({x, k, v: r.rows[ri][r.cols.indexOf(x.refColumn)]})).filter(o => o.v != null);
   $('#rowBody').innerHTML = r.cols.map((c, i) => {
     const v = r.rows[ri][i];
     if (f && !c.toLowerCase().includes(f) && !String(v ?? '').toLowerCase().includes(f)) return '';
     const ty = meta?.columns.find(x => x.name === c)?.type || '';
-    return `<div class="kv"><div class="k">${esc(c)}${ty ? `<small>${esc(ty.length > 40 ? ty.slice(0, 38) + '…' : ty)}</small>` : ''}</div><div class="v">${cellHtml(v, i, ri, fkOf(c))}</div></div>`;
+    return `<div class="kv"><div class="k">${esc(c)}${ty ? `<small>${esc(ty.length > 40 ? ty.slice(0, 38) + '…' : ty)}</small>` : ''}</div><div class="v">${cellHtml(v, i, ri, fkOf(c), urefOf(c))}</div></div>`;
   }).join('') + (rb.length ? `<h3 class="sub">Referenced by</h3>` + rb.map(o => `<div class="kv rb"><div class="k"><span class="ref" data-rb="${o.k}">${esc(o.x.table)}</span></div><div class="v">${esc(o.x.column)} = ${esc(o.v)}</div></div>`).join('') : '');
 }
 
@@ -1215,7 +1272,7 @@ $('#rowBody').onclick = e => {
     const x = Schema.sync(t.conn, t.table).referencedBy[+ref.dataset.rb], v = t.res.rows[ri][t.res.cols.indexOf(x.refColumn)];
     closeDrawer('#rowDrawer');
     openTable(x.table, {where: `${quoteId(driverOf(t.conn), x.column)} = ${sqlLit(v)}`, chain: [...t.chain, crumbOf(t, x.refColumn)], conn: t.conn});
-  } else { closeDrawer('#rowDrawer'); followFk(t, ri, +ref.dataset.ci); }
+  } else { closeDrawer('#rowDrawer'); followFk(t, ri, +ref.dataset.ci, null); }
 };
 $('#rowCopy').onclick = () => {
   const {t, ri} = rowCtx;
@@ -1230,6 +1287,7 @@ $('#tabbar').addEventListener('auxclick', e => { const tab = e.target.closest('.
 $('#refreshBtn').onclick = async () => {
   if (!App.conn) return;
   await api('/api/refresh', {conn: App.conn}).catch(e => toast(e.message));
+  for (const k in RefsOn) delete RefsOn[k];
   Schema.clear(App.conn);
   await switchConn(App.conn);
   const t = activeTab();

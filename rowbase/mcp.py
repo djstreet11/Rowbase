@@ -11,7 +11,7 @@ import json
 import sys
 import time
 
-from . import __version__, edit, engine, export, store, toon
+from . import __version__, edit, engine, export, refs, store, toon
 from .guard import QueryError
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -39,6 +39,12 @@ user's keychain; you never see passwords. Use connection NAMES as shown by `conn
 5. `sample` a few rows, `count` with a WHERE, then `query` with precise SQL. Join along foreign keys from `describe`.
 6. Use `explain` for slow queries (type=ALL in MySQL / Seq Scan in PostgreSQL means a full scan).
 
+## References without foreign keys (UUIDs)
+Some schemas (e.g. 1C-style: `Ref char(36)` primary keys, columns like `SenderAddress`, `Owner_Ref` + `Owner_TRef`)
+store references as UUIDs with no FK constraints. When a value is a UUID and `describe` shows no fk, call `find_ref`
+with the value (plus table/column, and the sibling *_TRef/*_Type value as hint if present) to learn which table holds
+it, then `sample` that table with `where` on its key.
+
 ## Output format (default: TOON)
 Tables come as `rows[N]{col1,col2}:` followed by one line per row, values comma-separated; strings with commas,
 quotes, colons or edge spaces are "quoted" with \\n/\\" escapes; null is `null`. Example:
@@ -48,7 +54,7 @@ rows[2]{id,name,total}:
 Metadata lines (`truncated`, `ms`, …) follow the table. Pass format=csv|json|md to override.
 
 ## Tools
-connections · databases · tables · describe · search_schema · sample · count · query · explain · guide
+connections · databases · tables · describe · search_schema · sample · count · query · explain · find_ref · guide
 (+ apply_changes when writes are allowed). Every tool takes `connection`; most take optional `database`.
 
 ## Dialect notes
@@ -191,6 +197,14 @@ def t_explain(a):
     return _result(res, "toon", {"hint": hint} if hint else None)
 
 
+def t_find_ref(a):
+    c = _conn(a["connection"], a.get("database"))
+    r = refs.resolve(c, (a.get("value") or "").strip(), a.get("table"), a.get("column"), a.get("hint"))
+    out = toon.table("matches", ["table", "pk", "label"], [[m["table"], m["pk"], m["label"] or None] for m in r["matches"]])
+    meta = {"found_by": r["how"]} if r["matches"] else {"searched_tables": r.get("searched", 0)}
+    return out + "\n" + toon.encode(meta)
+
+
 def t_apply_changes(a):
     cfg = _settings()
     if not cfg["allowWrites"]:
@@ -290,6 +304,19 @@ TOOLS = {
                  "analyze": {"type": "boolean", "description": "true = execute the statement to measure real timings and row counts "
                                                                "(EXPLAIN ANALYZE); default false = estimate only, nothing is executed."}},
                 ["connection", "sql"], "full"),
+    "find_ref": (t_find_ref, "Find referenced object",
+                 "Find which table holds a UUID value as its primary key — for schemas that store references as UUIDs without "
+                 "foreign keys (1C-style `Ref` keys, columns like SenderAddress or Owner_Ref). Use it when `describe` shows no fk "
+                 "for a column whose values are UUIDs; use `describe` fk + `query` instead when real foreign keys exist. Searches "
+                 "tables whose single-column primary key can hold a UUID: the hint table first, then tables named like the "
+                 "column (SenderAddress → …Addresses), then all of them. Returns matches[N]{table,pk,label} (label = "
+                 "Description/Name/Number/Code of the row) and found_by, or searched_tables when nothing matched." + ERRORS,
+                 {"connection": CONN, "database": DB,
+                  "value": _p("The UUID to look up, e.g. 7e6056b9-9582-11f1-a74c-005056bd6036."),
+                  "table": _p("Optional: table the value was read from (improves the guess and is remembered)."),
+                  "column": _p("Optional: column the value was read from, e.g. SenderAddress."),
+                  "hint": _p("Optional: value of a sibling type column such as Owner_TRef = 'Catalog.Counterparties'.")},
+                 ["connection", "value"], "full"),
 }
 WRITE_TOOL = ("apply_changes", t_apply_changes, "Apply row changes",
               "Insert, update or delete rows by primary key in ONE atomic transaction — only available when the user enabled "

@@ -62,7 +62,8 @@ History: `~/.config/rowbase/history.jsonl` (last 2000 entries).
 ### 2.5 Web UI features
 Connection manager (modal: URL paste, test, RO toggle, env/color/group), connection switcher with RO/RW badge and prod
 accent, table sidebar with filter (`/`), tabs persisted in localStorage, Data/Structure views, WHERE/ORDER BY with
-autocomplete, paging, COUNT, grid/transpose, column picker, row inspector with "Referenced by", **FK navigation** with
+autocomplete, paging, COUNT, grid/transpose, column picker, row inspector with "Referenced by", **FK navigation** and
+implicit UUID references (1C-style schemas, §5) with
 breadcrumbs, SQL console (highlighting, ⌘/Ctrl+Enter statement under caret, dialect EXPLAIN buttons, schema-aware
 autocomplete), confirmation for writes on RW connections, history drawer, copy JSON/TSV. English UI, no deps.
 
@@ -154,6 +155,12 @@ Deferred; keep contracts (§5) portable.
   Web: `POST /api/edit {conn, table, changes, dryRun}`.
 - Export: csv (RFC 4180, CRLF), tsv, json, md, sql (INSERT per row) — byte-identical across tracks via `tests/export_vectors.json`.
   Web: `POST /api/export` re-runs the statement with up to 1M rows.
+- Implicit references (`rowbase/refs.py`, `Refs.swift`): UUID values in non-FK columns link to tables whose single-column PK
+  can hold a UUID (char/varchar(36), uuid, binary(16); SQLite text). Resolution order: sibling type column (`X_TRef`/`X_Type`
+  value, e.g. `Catalog.Counterparties`) → learned (table, column) target → column-name match (`SenderAddress` → `…Addresses`)
+  → scan all, 40 tables per UNION ALL query. Label = first non-empty of Description/Name/Title/Label/Number/Code.
+  Heuristics pinned by `tests/ref_vectors.json`. Web: `GET /api/reftables?conn` → `{count}`, `POST /api/resolve
+  {conn, value, table, column, hint}` → `{matches[{table, pk, label}], how}`. MCP tool `find_ref`.
 - Database switch: web connection key `<id>::<db>`; native per-connection override in UI state. Not stored in connections.json.
 
 ## 6. Roadmap

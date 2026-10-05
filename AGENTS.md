@@ -82,3 +82,8 @@ short: facts and rules only, no history.
   social preview = `swift docs/assets/make-social.swift`; README screenshots in docs/assets (scratch data only — never real DB data).
 - 2026-10-05: Published: PyPI `rowbase-db` (Trusted Publishing from release.yml) and MCP Registry `io.github.djstreet11/rowbase`
   (mcp-registry.yml). `uvx --from rowbase-db rowbase mcp` verified (also on Python 3.14). PyPI name `rowbase` belongs to another project.
+- 2026-10-05: store.HOME is read at import → test modules must `import tests.test_engine` (sets ROWBASE_HOME/SECRETS) BEFORE
+  any `rowbase` import, else tests write to the real ~/.config/rowbase (happened once with test_refs; cleaned up).
+- 2026-10-05: Implicit UUID references (no FKs, 1C-style) restored generically: rowbase/refs.py + Refs.swift + ref_vectors.json;
+  the original work prototype (git show 747cd71:ui.py) resolved refs via 1C metadata — not used here.
+- 2026-10-05: Native perf: user's real tables are wide (70+ cols, big text). Profile before guessing (`sample`, snapshot bench hook).

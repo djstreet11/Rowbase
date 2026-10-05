@@ -86,6 +86,7 @@ table.grid td.bad{color:var(--danger);font-weight:600}
 .null{color:var(--null);font-style:italic}
 .ref{color:var(--accent);cursor:pointer}
 .ref:hover{text-decoration:underline}
+.eref{color:var(--null)}
 .welcome h2{margin:0 0 6px;color:var(--text)}.welcome h2 span{color:var(--accent)}.welcome p{margin:0 0 16px}
 pre.plan .warnl{color:var(--num);font-weight:600}
 pre.plan{margin:0;padding:12px 14px;font-family:var(--mono);font-size:12px;white-space:pre}

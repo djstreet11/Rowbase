@@ -25,7 +25,7 @@ MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for 
   and a built-in guide so the assistant knows how to use it. One copy-paste prompt sets everything up.
 - **One file, no installer.** Download a single binary for macOS, Linux or Windows and run it — no admin rights, no Python,
   no drivers to install. Or use the native macOS app.
-- **Nice to use.** Foreign-key navigation, "referenced by", transpose, column picker, schema-aware autocomplete,
+- **Nice to use.** Foreign-key navigation (also for UUID references without FKs, e.g. 1C-style schemas), "referenced by", transpose, column picker, schema-aware autocomplete,
   EXPLAIN highlighting, query cancel, inline editing with SQL preview, export to CSV/JSON/Markdown/SQL, SSH tunnels.
 - **Open source** under Apache-2.0. Passwords live in your OS keychain, never in config files.
 
@@ -63,7 +63,7 @@ rows[2]{id,customer,total}:
   2,ann,null
 truncated: false
 ```
-Tools: `guide`, `connections`, `databases`, `tables`, `describe`, `search_schema`, `sample`, `count`, `query`, `explain`
+Tools: `guide`, `connections`, `databases`, `tables`, `describe`, `search_schema`, `sample`, `count`, `query`, `explain`, `find_ref`
 (+ `apply_changes` only when you allow writes). Details: [docs/MCP.md](https://github.com/djstreet11/Rowbase/blob/main/docs/MCP.md).
 
 ## CLI
