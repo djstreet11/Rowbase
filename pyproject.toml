@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # PyPI name: "rowbase" is taken by an unrelated project. Import package and command stay `rowbase`.
 name = "rowbase-db"
-version = "0.2.3"
+version = "0.2.4"
 description = "Fast, safe, read-only-by-default database client for MySQL/MariaDB, PostgreSQL and SQLite — CLI, web UI and MCP server for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
