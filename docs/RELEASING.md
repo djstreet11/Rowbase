@@ -26,7 +26,7 @@ Ad-hoc builds run on this Mac. On other Macs Gatekeeper blocks them (right-click
 ## Auto-update key (Sparkle EdDSA) — one-time, done by the developer
 Each tagged release publishes `Rowbase-<v>.zip`, `SHA256SUMS` and — once this key exists — `appcast.xml` (docs/UPDATES.md).
 1. Download the Sparkle tools (same version as `SPARKLE_VERSION` in .github/workflows/release.yml), e.g.
-   `curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-2.9.6.tar.xz | tar xJ -C ~/sparkle`.
+   `curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz | tar xJ -C ~/sparkle`.
 2. `~/sparkle/bin/generate_keys` → stores the private key in your login Keychain and prints the **public** key
    → Info.plist `SUPublicEDKey` in native/scripts/bundle.sh (public, safe to commit). Current key (2026-10-05):
    `UkOKTzt1PkcCC7qWiHHgHptn0b4yowWM392/i3/yVVo=`.

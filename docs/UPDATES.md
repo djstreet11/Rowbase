@@ -40,7 +40,7 @@ release-notes window, scheduled background checks, phased rollout, "skip this ve
   stays staged and is installed on the next quit.
 
 ### Code (small)
-- `Package.swift`: Sparkle `from: "2.9.6"` → `Rowbase` target only (RowbaseCore stays UI/updater-free).
+- `Package.swift`: Sparkle `from: "2.10.0"` → `Rowbase` target only (RowbaseCore stays UI/updater-free).
 - `Updater.swift`: `AppUpdater.shared` wraps `SPUStandardUpdaterController(startingUpdater: true, …)`, created in
   `applicationDidFinishLaunching`; inert without `SUPublicEDKey` in Info.plist (dev builds, snapshots). App menu
   "Check for Updates…" (`CommandGroup(after: .appInfo)`), Settings (⌘,) pane: automatic checks / automatic download +

@@ -11,7 +11,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
         .package(url: "https://github.com/vapor/mysql-nio.git", from: "1.7.0"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.6"),   // auto-update, app only
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),   // auto-update, app only
     ],
     targets: [
         .target(name: "RowbaseCore", dependencies: [
