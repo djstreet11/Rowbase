@@ -311,21 +311,6 @@ final class GridRowView: NSTableRowView {
     }
 }
 
-/// Frame-laid-out host for the grid's scroll view. Cell churn while scrolling must not dirty the SwiftUI hosting view:
-/// otherwise every scroll step re-runs SwiftUI layout, which measures the whole table through a constraint engine.
-final class GridContainer: NSView {
-    let scrollView: NSScrollView
-    init(_ sv: NSScrollView) {
-        scrollView = sv
-        super.init(frame: .zero)
-        addSubview(sv)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
-    override var fittingSize: NSSize { .zero }
-    override func layout() { scrollView.frame = bounds }
-}
-
 struct ResultGrid: NSViewRepresentable {
     static let cellID = NSUserInterfaceItemIdentifier("rbcell")
 
@@ -344,7 +329,7 @@ struct ResultGrid: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> GridContainer {
+    func makeNSView(context: Context) -> NSScrollView {
         let c = context.coordinator
         let tv = GridTableView()
         tv.usesAlternatingRowBackgroundColors = false
@@ -377,12 +362,12 @@ struct ResultGrid: NSViewRepresentable {
         sv.autohidesScrollers = true
         sv.drawsBackground = true
         sv.backgroundColor = .textBackgroundColor
-        return GridContainer(sv)
+        return sv
     }
 
     /// Fill the offered space. Without this SwiftUI asks the scroll view for `fittingSize`, which pushes every cell view
     /// into a constraint engine on each SwiftUI layout pass (the bulk of the remaining scroll cost on wide tables).
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: GridContainer, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
         CGSize(width: proposal.width ?? 400, height: proposal.height ?? 300)
     }
 
@@ -409,7 +394,7 @@ struct ResultGrid: NSViewRepresentable {
         }
     }
 
-    func updateNSView(_ sv: GridContainer, context: Context) {
+    func updateNSView(_ sv: NSScrollView, context: Context) {
         let c = context.coordinator
         c.onFollowFK = onFollowFK
         c.onInspect = onInspect
