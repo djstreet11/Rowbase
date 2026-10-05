@@ -22,8 +22,8 @@ struct ResultArea: View {
                 ScrollView {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).padding(.top, 1)
-                        Text(e).font(.system(size: 12, design: .monospaced)).foregroundStyle(.red)
-                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        SelectableText(e, font: .mono(), color: .systemRed)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(10)
                     .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
@@ -62,18 +62,21 @@ struct ResultArea: View {
 
 private struct PlanText: View {
     let lines: [String]
+
+    /// one attributed string: Seq Scan lines in orange (a full table scan)
+    static func plan(_ lines: [String]) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        for (i, l) in lines.enumerated() {
+            out.append(NSAttributedString(string: (i > 0 ? "\n" : "") + l, attributes: [
+                .font: NSFont.mono(), .foregroundColor: l.contains("Seq Scan") ? NSColor.systemOrange : NSColor.labelColor]))
+        }
+        return out
+    }
     var body: some View {
         ScrollView([.vertical, .horizontal]) {
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
-                    Text(l.isEmpty ? " " : l)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(l.contains("Seq Scan") ? Color.orange : Color.primary)
-                        .fixedSize()
-                }
-            }
-            .textSelection(.enabled)
-            .padding(12)
+            SelectableText(attributed: Self.plan(lines), wraps: false)
+                .fixedSize()
+                .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .defaultScrollAnchor(.topLeading)  // 2-axis ScrollView centers small content otherwise

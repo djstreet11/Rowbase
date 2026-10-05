@@ -156,7 +156,7 @@ struct ConnectionsSheet: View {
             Button("Test") { test() }.disabled(testing)
             if testing { ProgressView().controlSize(.small) }
             if let r = testResult {
-                Text(r.text).font(.caption).foregroundStyle(r.ok ? Color.green : Color.red).lineLimit(2).textSelection(.enabled)
+                SelectableText(r.text, font: .systemFont(ofSize: NSFont.smallSystemFontSize), color: r.ok ? .systemGreen : .systemRed, maxLines: 2)
             }
             if let e = errorText { Text(e).font(.caption).foregroundStyle(.red).lineLimit(2) }
             Spacer()

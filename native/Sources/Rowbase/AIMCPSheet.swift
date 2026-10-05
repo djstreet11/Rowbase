@@ -154,9 +154,7 @@ struct AIMCPSheet: View {
 
     private func codeBox(_ text: String, height: CGFloat) -> some View {
         ScrollView {
-            Text(text)
-                .font(.system(size: 11, design: .monospaced))
-                .textSelection(.enabled)
+            SelectableText(text, font: .mono(11))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
         }

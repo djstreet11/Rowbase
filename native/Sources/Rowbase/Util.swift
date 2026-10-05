@@ -238,3 +238,52 @@ enum AppDefaults {
         return .standard
     }()
 }
+
+// MARK: - Selectable text (AppKit)
+
+/// Read-only, selectable text backed by an AppKit label. Replaces SwiftUI `Text(...).textSelection(.enabled)`:
+/// on macOS 15.0 selectable SwiftUI text whose content changes crashed in CoreText (pointer-auth trap while
+/// releasing the old string, see crash report 2026-10-05). AppKit labels take a different, stable rendering path.
+struct SelectableText: NSViewRepresentable {
+    var attributed: NSAttributedString
+    var wraps = true
+    var maxLines = 0
+
+    init(_ text: String, font: NSFont = .systemFont(ofSize: NSFont.systemFontSize), color: NSColor = .labelColor,
+         wraps: Bool = true, maxLines: Int = 0) {
+        attributed = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
+        (self.wraps, self.maxLines) = (wraps, maxLines)
+    }
+
+    init(attributed: NSAttributedString, wraps: Bool = true, maxLines: Int = 0) {
+        (self.attributed, self.wraps, self.maxLines) = (attributed, wraps, maxLines)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let f = wraps ? NSTextField(wrappingLabelWithString: "") : NSTextField(labelWithString: "")
+        f.isSelectable = true
+        f.isEditable = false
+        f.drawsBackground = false
+        f.isBordered = false
+        f.allowsEditingTextAttributes = true  // keep our attributes while selecting
+        f.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return f
+    }
+
+    func updateNSView(_ f: NSTextField, context: Context) {
+        if !f.attributedStringValue.isEqual(to: attributed) { f.attributedStringValue = attributed }
+        f.maximumNumberOfLines = maxLines
+        f.lineBreakMode = wraps ? .byWordWrapping : .byClipping
+        f.cell?.truncatesLastVisibleLine = maxLines > 0
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView f: NSTextField, context: Context) -> CGSize? {
+        let width = wraps ? (proposal.width ?? 480) : .greatestFiniteMagnitude
+        let size = f.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)) ?? .zero
+        return CGSize(width: wraps ? (proposal.width ?? ceil(size.width)) : ceil(size.width), height: ceil(size.height))
+    }
+}
+
+extension NSFont {
+    static func mono(_ size: CGFloat = 12) -> NSFont { .monospacedSystemFont(ofSize: size, weight: .regular) }
+}

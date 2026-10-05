@@ -126,7 +126,7 @@ struct StatusBar: View {
                     .popover(isPresented: $showSQL, arrowEdge: .top) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Generated SQL").font(.caption).foregroundStyle(.secondary)
-                            Text(t.buildSQL()).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                            SelectableText(t.buildSQL(), font: .mono())
                                 .frame(maxWidth: 480, alignment: .leading)
                             HStack {
                                 Button("Copy") { copyToPasteboard(t.buildSQL()) }

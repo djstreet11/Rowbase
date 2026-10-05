@@ -103,9 +103,7 @@ struct SQLPreviewSheet: View {
             .padding(12)
             Divider()
             ScrollView([.vertical, .horizontal]) {
-                Text(text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
+                SelectableText(text, font: .mono(), wraps: false)
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)

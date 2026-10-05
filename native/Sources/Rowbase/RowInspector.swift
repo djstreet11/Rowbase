@@ -83,7 +83,6 @@ struct RowInspector: View {
         let editable = tab.isEditable(name) && !tab.deleted.contains(row)
         let edited = tab.isEdited(row: row, column: name)
         let fk = ci?.fk != nil && !tab.isQuery
-        let mono = Font.system(size: 12, design: .monospaced)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Text(name).fontWeight(.semibold).lineLimit(1)
@@ -105,8 +104,8 @@ struct RowInspector: View {
                     InspectorEditField(tab: tab, row: row, name: name, value: value)
                         .id("\(row)|\(name)|\(edited)")
                 } else if let value {
-                    Text(value).font(mono).foregroundStyle(fk ? Color(nsColor: .linkColor) : .primary)
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    SelectableText(value, font: .mono(), color: fk ? .linkColor : .labelColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     Text("NULL").font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 5).padding(.vertical, 1)
