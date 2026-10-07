@@ -281,7 +281,8 @@ function setHidden(t, set) { if (t.type === 'table') store.set(hiddenKey(t), [..
 
 function saveTabs() {
   store.set('tabs', App.tabs.map(t => ({id: t.id, type: t.type, conn: t.conn, table: t.table, where: t.where, order: t.order,
-    limit: t.limit, view: t.view, mode: t.mode, chain: t.chain, title: t.title, label: t.label, sql: t.sql, hidden: t.hidden})));
+    limit: t.limit, view: t.view, mode: t.mode, chain: t.chain, title: t.title, label: t.label, sql: t.sql, hidden: t.hidden,
+    ...(t.type === 'table' && t.filters?.conds.length ? {filters: t.filters, fwhere: t.fwhere} : {})})));
   store.set('activeTab', App.active);
 }
 
@@ -323,6 +324,7 @@ function tabTitle(t) {
   let s = t.table;
   if (t.label) s += ' · ' + t.label;
   else if (t.where) s += ' · ' + (t.where.length > 40 ? t.where.slice(0, 38) + '…' : t.where);
+  if (t.filters?.conds.length) s += ` · ${plural(t.filters.conds.length, 'filter')}`;
   return s;
 }
 
@@ -393,6 +395,8 @@ function buildPane(t) {
   $('.limit', tpl).value = String(t.limit);
   $('.result', tpl).addEventListener('click', e => gridClick(t, e));
   $('.result', tpl).addEventListener('auxclick', e => gridClick(t, e));
+  $('.result', tpl).addEventListener('contextmenu', e => cellMenu(t, e));
+  renderChips(t);
   updateColsBtn(t);
   if (t.type === 'table') buildTablePane(t, tpl); else buildConsolePane(t, tpl);
 }
@@ -437,7 +441,7 @@ function applyView(t) {
 const qTable = t => Schema.sync(t.conn, t.table)?.quoted || (driverOf(t.conn) === 'mysql' ? quoteId('mysql', t.table) : t.table.split('.').map(p => quoteId('postgres', p)).join('.'));
 function tableSql(t) {
   let sql = 'SELECT *\nFROM ' + qTable(t);
-  if (t.where) sql += '\nWHERE ' + t.where;
+  if (effWhere(t)) sql += '\nWHERE ' + effWhere(t);
   if (t.order) sql += '\nORDER BY ' + t.order;
   return sql + '\nLIMIT ' + t.limit + (t.offset ? ' OFFSET ' + t.offset : '');
 }
@@ -474,7 +478,7 @@ async function runTable(t) {
 async function countRows(t) {
   status('COUNT…');
   try {
-    const sql = 'SELECT COUNT(*) AS cnt FROM ' + (await Schema.table(t.conn, t.table)).quoted + (t.where ? ' WHERE ' + t.where : '');
+    const sql = 'SELECT COUNT(*) AS cnt FROM ' + (await Schema.table(t.conn, t.table)).quoted + (effWhere(t) ? ' WHERE ' + effWhere(t) : '');
     const r = await api('/api/query', {conn: t.conn, sql, limit: 1, timeout: 60, source: 'count'});
     status(`COUNT = ${fmtN(r.rows[0][0])} · ${r.elapsed.toFixed(2)} s`);
   } catch (e) { status('Error'); toast(e.message); }
@@ -545,6 +549,8 @@ function runConsole(t, prefix) {
   const writes = !READ_FIRST.test(first) || (/^WITH$/i.test(first) && /\b(INSERT|UPDATE|DELETE|MERGE)\b/i.test(stripLiterals(sql)));
   if (!c.readOnly && writes && !confirm(`Run on READ-WRITE connection ${c.name}?\n\n${sql.slice(0, 300)}`)) return;
   $('.sqlline', t.el).textContent = sql.replace(/\s+/g, ' ');
+  t.baseSql = prefix ? '' : sql;
+  if (t.filters?.conds.length) { t.filters = null; t.fwhere = ''; renderChips(t); }  // a new statement starts unfiltered
   return execute(t, sql, t.limit, prefix ? prefix.trim().toLowerCase() : 'console');
 }
 
@@ -625,7 +631,8 @@ function renderResult(t) {
   const insRows = (p?.ins || []).map((v, k) => `<tr class="inserted"><td class="rn" title="New row">+</td>${idx.map(i =>
     `<td class="${r.cols[i] in v ? 'edited' : ''}" data-c="${i}" data-r="i${k}">${r.cols[i] in v ? cellHtml(v[r.cols[i]], i, -1) : '<span class="null">DEFAULT</span>'}</td>`).join('')}</tr>`).join('');
   const shown = (row, ri, i) => (edits[ri] && r.cols[i] in edits[ri] ? edits[ri][r.cols[i]] : row[i]);
-  const head = '<th class="rn">#</th>' + idx.map(i => `<th data-sort="${i}" title="${esc(typeOf(r.cols[i]))}">${esc(r.cols[i])}${s && s.i === i ? (s.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('');
+  const filt = canFilter(t) && !r.explain;
+  const head = '<th class="rn">#</th>' + idx.map(i => `<th data-sort="${i}" title="${esc(typeOf(r.cols[i]))}">${esc(r.cols[i])}${s && s.i === i ? (s.dir > 0 ? ' ▲' : ' ▼') : ''}${filt ? `<span class="fb${fltCond(t, r.cols[i]) ? ' on' : ''}" data-fcol="${i}" title="Filter by ${esc(r.cols[i])}">${FUNNEL}</span>` : ''}</th>`).join('');
   const body = insRows + r.rows.map((row, ri) => `<tr class="${badRow(row) ? 'bad' : ''}${del.has(ri) ? ' deleted' : ''}"><td class="rn" data-row="${ri}" title="All fields of the row">${off + ri + 1}</td>${idx.map(i => {
     const v = shown(row, ri, i), ed = edits[ri] && r.cols[i] in edits[ri];
     return `<td class="${badCell(row, i) ? 'bad' : ''}${ed ? ' edited' : ''}" data-c="${i}" data-r="${ri}" title="${v === null ? '' : esc(String(v).slice(0, 500))}">${cellHtml(v, i, ri, ed ? null : fkOf(r.cols[i]), !ed && urefOf(r.cols[i]))}</td>`;
@@ -648,6 +655,8 @@ function sortBy(t, i) {
 }
 
 function gridClick(t, e) {
+  const fb = e.target.closest('.fb');
+  if (fb && e.button === 0) return filterPop(t, t.res.cols[+fb.dataset.fcol], fb);
   const th = e.target.closest('th[data-sort]');
   if (th && e.button === 0) return sortBy(t, +th.dataset.sort);
   const rn = e.target.closest('[data-row]');
@@ -710,6 +719,184 @@ function colPicker(t, anchor) {
   draw();
   placePop(p, anchor);
   q.focus();
+}
+
+// ------------------------------------------------------------------ column filters (contract: rowbase/query.py)
+
+const FILTER_OPS = [
+  ['Values', [['in', 'is one of'], ['not_in', 'is not one of']]],
+  ['Compare', [['eq', '='], ['ne', '≠'], ['gt', '>'], ['ge', '≥'], ['lt', '<'], ['le', '≤'], ['between', 'between']]],
+  ['Text', [['contains', 'contains'], ['not_contains', "doesn't contain"], ['starts', 'starts with'], ['ends', 'ends with'],
+    ['like', 'LIKE pattern'], ['not_like', 'NOT LIKE pattern'], ['regex', 'matches regex']]],
+  ['Empty', [['null', 'is NULL'], ['not_null', 'is not NULL'], ['empty', 'is empty'], ['not_empty', 'is not empty']]],
+];
+const OP_LABEL = Object.fromEntries(FILTER_OPS.flatMap(g => g[1]));
+const OP_ARITY = op => (['in', 'not_in'].includes(op) ? 'n' : op === 'between' ? 2 : ['null', 'not_null', 'empty', 'not_empty'].includes(op) ? 0 : 1);
+const OP_HINT = {contains: 'case-insensitive, no wildcards needed', not_contains: 'NULL rows are kept', ne: 'NULL rows are kept',
+  not_in: 'NULL rows are kept unless NULL is selected', like: '% = any text, _ = one character', not_like: '% = any text, _ = one character',
+  regex: 'e.g. ^ab.*z$ (not available on SQLite)', between: 'inclusive; leave one side empty for ≥ / ≤', empty: "empty string ''"};
+const FUNNEL = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M1.5 2h13l-5 6.2V13l-3 1.5V8.2z" fill="currentColor"/></svg>';
+const fltOf = t => (t.filters ||= {match: 'all', conds: []});
+const fltCond = (t, col) => t.filters?.conds.find(c => c.col === col);
+const canFilter = t => t.type === 'table' || (t.type === 'console' && /^\s*\(*\s*(SELECT|WITH|VALUES|TABLE)\b/i.test(t.baseSql || ''));
+const shortV = v => (v === null ? 'NULL' : v === '' ? "''" : String(v).length > 24 ? String(v).slice(0, 22) + '…' : String(v));
+function condText(c) {
+  const a = OP_ARITY(c.op);
+  if (a === 0) return `${c.col} ${OP_LABEL[c.op]}`;
+  if (a === 'n') return `${c.col} ${c.op === 'in' ? '∈' : '∉'} ${c.values.length > 3 ? c.values.slice(0, 3).map(shortV).join(', ') + ` +${c.values.length - 3}` : c.values.map(shortV).join(', ')}`;
+  if (a === 2) return `${c.col} ${(c.value || '') && '≥ ' + shortV(c.value)}${c.value && c.value2 ? ' and ' : ''}${(c.value2 || '') && '≤ ' + shortV(c.value2)}`;
+  return `${c.col} ${OP_LABEL[c.op]} ${shortV(c.value)}`;
+}
+/** Effective WHERE of a table tab: raw WHERE field AND column filters. */
+function effWhere(t, without) {
+  const fw = without === undefined ? t.fwhere : without;
+  return t.where && fw ? `(${t.where}) AND (${fw})` : t.where || fw || '';
+}
+async function buildWhere(t, conds) {
+  if (!conds.length) return '';
+  return (await api('/api/build', {conn: t.conn, table: t.type === 'table' ? t.table : null, filters: {match: t.filters.match, conds}})).where;
+}
+async function setFilter(t, col, cond) {
+  const f = fltOf(t), i = f.conds.findIndex(c => c.col === col);
+  if (cond) { cond.col = col; if (i >= 0) f.conds[i] = cond; else f.conds.push(cond); } else if (i >= 0) f.conds.splice(i, 1);
+  await applyFilters(t);
+}
+async function applyFilters(t) {
+  try { t.fwhere = await buildWhere(t, fltOf(t).conds); } catch (e) { return toast(e.message); }
+  renderChips(t); renderTabbar(); saveTabs();
+  if (t.type === 'table') { t.offset = 0; await runTable(t); } else await runConsoleFiltered(t);
+}
+function renderChips(t) {
+  const el = $('.fchips', t.el), f = t.filters;
+  if (!el) return;
+  el.hidden = !f?.conds.length;
+  if (el.hidden) { el.innerHTML = ''; return; }
+  el.innerHTML = `<span class="fl">${FUNNEL} Filters</span>` + (f.conds.length > 1 ? `<div class="seg fmatch"><button data-m="all" class="${f.match !== 'any' ? 'on' : ''}" title="Rows must match every filter">all</button><button data-m="any" class="${f.match === 'any' ? 'on' : ''}" title="Rows may match any filter">any</button></div>` : '')
+    + f.conds.map((c, k) => `<span class="fchip" data-k="${k}" title="Edit filter">${esc(condText(c))}<button class="x" data-x="${k}" title="Remove">×</button></span>`).join('')
+    + '<button class="ghost fclear">Clear all</button>';
+  el.onclick = e => {
+    const x = e.target.closest('[data-x]'), chip = e.target.closest('.fchip'), m = e.target.closest('[data-m]');
+    if (x) { f.conds.splice(+x.dataset.x, 1); applyFilters(t); } else if (chip) filterPop(t, f.conds[+chip.dataset.k].col, chip);
+    else if (m) { f.match = m.dataset.m; applyFilters(t); } else if (e.target.closest('.fclear')) { f.conds = []; applyFilters(t); }
+  };
+}
+/** Distinct values (+counts) for the popover: server-side for table tabs, the loaded rows otherwise or on error. */
+async function filterValues(t, col, search) {
+  if (t.type === 'table') {
+    try {
+      const others = fltOf(t).conds.filter(c => c.col !== col);
+      const where = effWhere(t, await buildWhere(t, others));
+      const r = await api('/api/values', {conn: t.conn, table: t.table, column: col, where, search, limit: 300});
+      return {values: r.values, truncated: r.truncated, note: r.truncated ? 'Top 300 values — search to narrow' : ''};
+    } catch (e) { /* timeout on a huge table etc.: fall back to the page */ }
+  }
+  const ci = t.res?.cols.indexOf(col) ?? -1, cnt = new Map(), s = (search || '').toLowerCase();
+  for (const row of ci >= 0 ? t.res.rows : []) {
+    const v = row[ci];
+    if (!s || String(v ?? '').toLowerCase().includes(s)) cnt.set(v, (cnt.get(v) || 0) + 1);
+  }
+  return {values: [...cnt].sort((a, b) => b[1] - a[1]).slice(0, 300), note: 'Values from the loaded rows only'};
+}
+function filterPop(t, col, anchor, preset) {
+  closePops();
+  const meta = t.type === 'table' ? Schema.sync(t.conn, t.table) : null, type = meta?.columns.find(c => c.name === col)?.type || '';
+  const cur = preset || fltCond(t, col) || {op: 'in', values: []};
+  const st = {op: cur.op, sel: new Map((cur.values || []).map(v => [v, true])), list: [], extra: []};
+  const p = document.createElement('div');
+  p.className = 'pop fpop';
+  p.innerHTML = `<div class="fh"><b>${esc(col)}</b><small>${esc(type)}</small></div>
+    <select class="fop">${FILTER_OPS.map(([g, ops]) => `<optgroup label="${g}">${ops.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</optgroup>`).join('')}</select>
+    <div class="fv"><input class="v1 mono" placeholder="value"><input class="v2 mono" placeholder="and" hidden></div>
+    <div class="fvals"><input class="fs" placeholder="Search values · Enter adds your own"><div class="flh"><label><input type="checkbox" class="fall"> <span>Value</span></label><span>Count</span></div><div class="fl2"></div><div class="fnote"></div></div>
+    <div class="fhint"></div>
+    <div class="ff"><button data-a="clear" title="Remove this filter">Clear</button><span class="spacer"></span><button data-a="cancel">Cancel</button><button class="primary" data-a="ok">Apply</button></div>`;
+  const op = $('.fop', p), v1 = $('.v1', p), v2 = $('.v2', p), fs = $('.fs', p), list = $('.fl2', p);
+  op.value = st.op; v1.value = cur.value ?? ''; v2.value = cur.value2 ?? '';
+  const draw = () => {
+    const items = [...st.extra.filter(v => !st.list.some(x => x[0] === v)).map(v => [v, null]), ...st.list];
+    list.innerHTML = items.length ? items.map(([v, n], k) => `<label data-k="${k}"><input type="checkbox"${st.sel.has(v) ? ' checked' : ''}><span class="${v === null || v === '' ? 'null' : ''}">${esc(v === null ? 'NULL' : v === '' ? '(empty)' : String(v).length > 120 ? String(v).slice(0, 118) + '…' : v)}</span><i>${n == null ? 'custom' : fmtN(n)}</i></label>`).join('')
+      : '<div class="empty">No values</div>';
+    list._items = items;
+    $('.fall', p).checked = items.length > 0 && items.every(([v]) => st.sel.has(v));
+  };
+  const mode = () => {
+    const a = OP_ARITY(op.value);
+    $('.fvals', p).hidden = a !== 'n'; $('.fv', p).hidden = a === 0 || a === 'n'; v2.hidden = a !== 2;
+    v1.placeholder = a === 2 ? 'from' : op.value === 'like' || op.value === 'not_like' ? '%pattern%' : 'value';
+    $('.fhint', p).textContent = OP_HINT[op.value] || '';
+    if (a === 1 || a === 2) setTimeout(() => v1.focus(), 0); else if (a === 'n') setTimeout(() => fs.focus(), 0);
+  };
+  let seq = 0;
+  const load = async () => {
+    const my = ++seq;
+    $('.fnote', p).textContent = 'Loading…';
+    const r = await filterValues(t, col, fs.value.trim());
+    if (my !== seq) return;
+    st.list = r.values; $('.fnote', p).textContent = r.note || ''; draw();
+  };
+  let timer;
+  fs.oninput = () => { clearTimeout(timer); timer = setTimeout(load, 250); };
+  fs.onkeydown = e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = fs.value;
+    if (v && !st.list.some(x => String(x[0]) === v)) { st.extra.unshift(v); st.sel.set(v, true); fs.value = ''; load(); } else apply();
+  };
+  list.onchange = e => {
+    const lb = e.target.closest('label[data-k]'), v = list._items[+lb.dataset.k][0];
+    if (e.target.checked) st.sel.set(v, true); else st.sel.delete(v);
+    $('.fall', p).checked = list._items.every(([x]) => st.sel.has(x));
+  };
+  $('.fall', p).onchange = e => { list._items.forEach(([v]) => (e.target.checked ? st.sel.set(v, true) : st.sel.delete(v))); draw(); };
+  op.onchange = mode;
+  const apply = () => {
+    const a = OP_ARITY(op.value), c = {op: op.value};
+    if (a === 'n') { c.values = [...st.sel.keys()]; if (!c.values.length) return setFilter(t, col, null).then(() => p.remove()); }
+    if (a === 1 || a === 2) { c.value = v1.value; if (a === 1 && v1.value === '' && !['eq', 'ne'].includes(op.value)) return v1.focus(); }
+    if (a === 2) { c.value2 = v2.value; if (!v1.value && !v2.value) return v1.focus(); }
+    p.remove();
+    setFilter(t, col, c);
+  };
+  [v1, v2].forEach(i => (i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }));
+  p.onclick = e => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'ok') apply(); else if (a === 'cancel') p.remove(); else if (a === 'clear') { p.remove(); setFilter(t, col, null); }
+  };
+  placePop(p, anchor);
+  mode();
+  load();
+}
+/** Right-click on a cell: one-click filters by that value. */
+function cellMenu(t, e) {
+  const td = e.target.closest('td[data-c]');
+  if (!td || td.dataset.r[0] === 'i' || !canFilter(t)) return;
+  e.preventDefault();
+  const col = t.res.cols[+td.dataset.c], v = t.res.rows[+td.dataset.r][+td.dataset.c];
+  const items = v === null ? [['null', 'is NULL'], ['not_null', 'is not NULL']]
+    : [['eq', `= ${shortV(v)}`], ['ne', `≠ ${shortV(v)}`], ['contains', `contains ${shortV(v)}…`], ['gt', `> ${shortV(v)}`], ['lt', `< ${shortV(v)}`], ['null', 'is NULL']];
+  closePops();
+  const p = document.createElement('div');
+  p.className = 'pop menu cmenu';
+  p.innerHTML = `<div class="mh">Filter ${esc(col)}</div>` + items.map(([op, l]) => `<div data-op="${op}"><b>${esc(l)}</b></div>`).join('')
+    + `<div data-op="more"><b>More filters…</b></div>` + (fltCond(t, col) ? '<div data-op="clear"><b>Clear filter</b></div>' : '')
+    + `<div data-op="copy"><b>Copy value</b></div>`;
+  p.onclick = ev => {
+    const op = ev.target.closest('[data-op]')?.dataset.op;
+    if (!op) return;
+    p.remove();
+    if (op === 'copy') return navigator.clipboard.writeText(v === null ? 'NULL' : String(v)).then(() => toast('Copied', true));
+    if (op === 'clear') return setFilter(t, col, null);
+    if (op === 'more') return filterPop(t, col, td);
+    if (op === 'contains') return filterPop(t, col, td, {op, value: String(v)});
+    setFilter(t, col, OP_ARITY(op) === 0 ? {op} : {op, value: String(v)});
+  };
+  placePop(p, {getBoundingClientRect: () => ({left: e.clientX, bottom: e.clientY - 4})});
+}
+async function runConsoleFiltered(t) {
+  if (!t.baseSql) return;
+  const sql = t.fwhere ? `SELECT *\nFROM (\n${t.baseSql}\n) AS rb_f\nWHERE ${t.fwhere}` : t.baseSql;
+  $('.sqlline', t.el).textContent = sql.replace(/\s+/g, ' ');
+  await execute(t, sql, t.limit, 'console');
 }
 
 // ------------------------------------------------------------------ foreign keys
@@ -883,7 +1070,7 @@ function exportMenu(t, anchor) {
 }
 async function exportTo(t, fmt) {
   let sql, table = t.type === 'table' ? t.table : null;
-  if (t.type === 'table') sql = 'SELECT * FROM ' + qTable(t) + (t.where ? ' WHERE ' + t.where : '') + (t.order ? ' ORDER BY ' + t.order : '');
+  if (t.type === 'table') sql = 'SELECT * FROM ' + qTable(t) + (effWhere(t) ? ' WHERE ' + effWhere(t) : '') + (t.order ? ' ORDER BY ' + t.order : '');
   else {
     sql = t.lastSql;
     if (!sql) return toast('Run a query first');

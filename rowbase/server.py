@@ -177,7 +177,7 @@ def run_build(body):
         sources = [spec.get("from") or {}] + list(spec.get("joins") or [])
         types = {s.get("as") or s["table"]: _types(conn, db, s["table"]) for s in sources if s.get("table")}
         return {"sql": query.select_sql(drv, spec, types)}
-    return {"where": query.filter_where(drv, body.get("filters"), _types(conn, db, body["table"]))}
+    return {"where": query.filter_where(drv, body.get("filters"), _types(conn, db, body["table"]) if body.get("table") else {})}
 
 
 def run_values(body):

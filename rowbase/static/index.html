@@ -117,7 +117,7 @@
     <div class="crumbs"></div>
     <div class="bar">
       <div class="seg view"><button data-v="data" class="on">Data</button><button data-v="structure">Structure</button></div>
-      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="Ctrl+Space for suggestions"></div>
+      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="raw SQL condition (Ctrl+Space for suggestions) — or use the ⏷ filter in a column header"></div>
       <div class="field order-f"><span class="lbl">ORDER BY</span><input class="order mono" spellcheck="false"></div>
       <select class="limit"><option>50</option><option selected>100</option><option>500</option><option>1000</option></select>
       <button class="primary run" title="Run (Enter)">▶</button>
@@ -134,6 +134,7 @@
       <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
+    <div class="fchips" hidden></div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
     <div class="gridwrap structure" hidden></div>
@@ -155,6 +156,7 @@
       <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
+    <div class="fchips" hidden></div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
   </div>

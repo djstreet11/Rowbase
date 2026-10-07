@@ -196,3 +196,27 @@ dialog.ai::backdrop{background:rgba(0,0,0,.35)}.ai-form{display:flex;flex-direct
 .ai-conns small{color:var(--muted)}.ai-conns .rw{color:var(--danger)}#aiClients{align-self:flex-start}
 .ai-conns label{display:flex;gap:8px;align-items:center;justify-content:flex-start;text-align:left;font-size:13px;color:var(--text)}.ai-conns label small{margin-left:4px}
 .ai-body>*{flex-shrink:0}.ai-conns input[type=checkbox]{width:auto;flex:none}
+/* column filters */
+table.grid th .fb{display:inline-flex;vertical-align:-1px;margin-left:6px;padding:2px 3px;border-radius:4px;color:var(--muted);opacity:.3;cursor:pointer}
+table.grid th:hover .fb{opacity:.75}table.grid th .fb:hover{opacity:1;background:var(--line);color:var(--text)}
+table.grid th .fb.on{opacity:1;color:#fff;background:var(--accent)}
+.fchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 14px 0}
+.fchips .fl{display:flex;gap:4px;align-items:center;color:var(--accent);font-size:12px;font-weight:600}
+.fchips .seg button{padding:1px 8px;font-size:12px}
+.fchip{display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:12px;background:var(--accent-bg);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:12px;padding:1px 4px 1px 10px;cursor:pointer;max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fchip .x{border:0;background:transparent;color:inherit;padding:0 4px;line-height:16px;border-radius:8px}.fchip .x:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+.fchips .fclear{font-size:12px;color:var(--muted);padding:1px 6px}
+.pop.fpop{width:360px;display:flex;flex-direction:column;gap:8px;padding:10px;max-height:min(560px,80vh)}
+.fpop .fh{display:flex;gap:8px;align-items:baseline}.fpop .fh b{font-family:var(--mono)}.fpop .fh small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fpop .fv{display:flex;gap:6px}.fpop .fv input{flex:1;min-width:0}
+.fpop .fvals{display:flex;flex-direction:column;gap:4px;min-height:0;flex:1}
+.fpop .flh{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;padding:2px 8px;border-bottom:1px solid var(--line)}
+.fpop .flh label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.fpop .fl2{overflow:auto;min-height:60px;max-height:300px}
+.fpop .fl2 label{display:flex;gap:8px;align-items:center;padding:2px 8px;font-family:var(--mono);font-size:12px;cursor:pointer}
+.fpop .fl2 label:hover{background:var(--hover)}.fpop .fl2 label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fpop .fl2 label i{margin-left:auto;color:var(--muted);font-style:normal;font-size:11px;padding-left:10px}
+.fpop .fnote,.fpop .fhint{color:var(--muted);font-size:11px}.fpop .fhint:empty,.fpop .fnote:empty{display:none}
+.fpop .ff{display:flex;gap:6px;align-items:center}
+.pop.cmenu{min-width:200px}.pop.cmenu .mh{cursor:default;color:var(--muted);font-size:11px;font-family:var(--mono)}.pop.cmenu .mh:hover{background:none}
+.pop.cmenu div b{font-weight:500;font-family:var(--mono);font-size:12px}
