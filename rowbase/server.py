@@ -11,7 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import edit, engine, export, refs, store, update
+from . import edit, engine, export, query, refs, store, update
 from .guard import QueryError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -163,6 +163,34 @@ def run_edit(body):
     return res
 
 
+def _types(key, db, table):
+    info = cached(("table", *ref(key, db), table), lambda: engine.table_info(conn_for(key, db), table))
+    return {c["name"]: c["type"] for c in info["columns"]}
+
+
+def run_build(body):
+    """Column filters → WHERE text ({table, filters}) or a visual query spec → SELECT ({query}); see rowbase/query.py."""
+    conn, db = body["conn"], body.get("db")
+    drv = engine.dialect(conn_for(conn, db))
+    if "query" in body:
+        spec = body["query"]
+        sources = [spec.get("from") or {}] + list(spec.get("joins") or [])
+        types = {s.get("as") or s["table"]: _types(conn, db, s["table"]) for s in sources if s.get("table")}
+        return {"sql": query.select_sql(drv, spec, types)}
+    return {"where": query.filter_where(drv, body.get("filters"), _types(conn, db, body["table"]))}
+
+
+def run_values(body):
+    """Distinct values + counts of one column for the filter popover (other filters applied via `where`)."""
+    conn, db, table, col = body["conn"], body.get("db"), body["table"], body["column"]
+    c = conn_for(conn, db)
+    limit = max(1, min(int(body.get("limit") or 200), 1000))
+    sql = query.values_sql(engine.dialect(c), table, col, body.get("where") or "", body.get("search") or "",
+                           _types(conn, db, table).get(col, ""), limit + 1)
+    res = engine.execute(c, sql, limit=limit + 1, timeout=int(body.get("timeout") or 15), pooled=True)
+    return {"values": res["rows"][:limit], "truncated": len(res["rows"]) > limit, "elapsed": res["elapsed"], "sql": sql}
+
+
 def version_info(force=False):
     if update.disabled() and not force:
         return {"current": update.__version__, "latest": None, "available": False, "disabled": True}
@@ -258,6 +286,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/conns/delete": lambda: conn_delete(body),
             "/api/conns/test": lambda: conn_test(body),
             "/api/edit": lambda: run_edit(body),
+            "/api/build": lambda: run_build(body),
+            "/api/values": lambda: run_values(body),
             "/api/settings": lambda: store.save_settings(body),
             "/api/update": lambda: run_update(self.server.server_address[1]),
             "/api/refresh": lambda: drop_cache(body.get("conn")) or {"ok": True},

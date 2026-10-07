@@ -1,0 +1,4688 @@
+{
+ "_comment": "Shared by tests/test_query.py and native/Tests/RowbaseCoreTests/QueryBuilderTests.swift — rowbase/query.py is the reference.",
+ "filters": [
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "O'Reilly \\ x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` = 'O''Reilly \\\\ x'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` = 42"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` = '42'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "code",
+      "op": "eq",
+      "value": "7"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`code` = '7'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "ne",
+      "value": "5"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`id` <> 5 OR `id` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "gt",
+      "value": "9.99"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`price` > 9.99"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "ge",
+      "value": "-1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`price` >= -1"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "lt",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`price` < 'abc'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "le",
+      "value": "3"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` <= 3"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "50%_off!"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` LIKE '%50!%!_off!!%' ESCAPE '!'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "contains",
+      "value": "12"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` LIKE '%12%' ESCAPE '!'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_contains",
+      "value": "test"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`name` NOT LIKE '%test%' ESCAPE '!' OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "pgname",
+      "op": "starts",
+      "value": "Ab"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`pgname` LIKE 'Ab%' ESCAPE '!'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ends",
+      "value": ".com"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` LIKE '%.com' ESCAPE '!'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "like",
+      "value": "a%b_"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` LIKE 'a%b_'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_like",
+      "value": "%x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`name` NOT LIKE '%x' OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` BETWEEN 1 AND 10"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` >= 1"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` <= 10"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a",
+       "b",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`name` IN ('a', 'b') OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` = 'a'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "in",
+      "values": [
+       "1",
+       "2"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` IN (1, 2)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": []
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       "b"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`name` NOT IN ('a', 'b') OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` <> 'a'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(`name` <> 'a' OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NOT NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NOT NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` = ''"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "not_empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` <> ''"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "eq",
+      "value": "0000f6e3-20ed-11f0-bca6-005056aabbcc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`ref` = UNHEX('0000F6E320ED11F0BCA6005056AABBCC')"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "in",
+      "values": [
+       "0000f6e3-20ed-11f0-bca6-005056aabbcc",
+       "zz"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`ref` IN (UNHEX('0000F6E320ED11F0BCA6005056AABBCC'), 'zz')"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "data",
+      "op": "eq",
+      "value": "0xDEADbeef"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`data` = X'DEADBEEF'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "flag",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`flag` = '1'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "uid",
+      "op": "contains",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`uid` LIKE '%abc%' ESCAPE '!'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ne",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` IS NOT NULL"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` = ''"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "na`me\"x",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`na``me\"x` = '1'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "any",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "x"
+     },
+     {
+      "col": "name",
+      "op": "ne",
+      "value": "y"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` > 1 OR `name` LIKE '%x%' ESCAPE '!' OR (`name` <> 'y' OR `name` IS NULL)"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "a"
+       },
+       {
+        "col": "name",
+        "op": "null"
+       }
+      ]
+     },
+     {
+      "match": "all",
+      "conds": [
+       {
+        "col": "price",
+        "op": "lt",
+        "value": "5"
+       },
+       {
+        "col": "price",
+        "op": "gt",
+        "value": "1"
+       }
+      ]
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "solo"
+       },
+       {
+        "col": "name",
+        "op": "contains",
+        "value": ""
+       }
+      ]
+     },
+     {
+      "op": "eq",
+      "value": "nocol"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`id` > 1 AND (`name` = 'a' OR `name` IS NULL) AND `price` < 5 AND `price` > 1 AND `name` = 'solo'"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "conds": []
+   },
+   "types": {},
+   "expected": ""
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "5"
+     },
+     {
+      "col": "code",
+      "op": "in",
+      "values": [
+       "1",
+       "x"
+      ]
+     }
+    ]
+   },
+   "types": {},
+   "expected": "`id` = '5' AND `code` IN ('1', 'x')"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "O'Reilly \\ x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = 'O''Reilly \\ x'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" = 42"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = '42'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "code",
+      "op": "eq",
+      "value": "7"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"code\" = '7'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "ne",
+      "value": "5"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"id\" <> 5 OR \"id\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "gt",
+      "value": "9.99"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" > 9.99"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "ge",
+      "value": "-1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" >= -1"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "lt",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" < 'abc'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "le",
+      "value": "3"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" <= 3"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "50%_off!"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" ILIKE '%50!%!_off!!%' ESCAPE '!'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "contains",
+      "value": "12"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "CAST(\"id\" AS TEXT) ILIKE '%12%' ESCAPE '!'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_contains",
+      "value": "test"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT ILIKE '%test%' ESCAPE '!' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "pgname",
+      "op": "starts",
+      "value": "Ab"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"pgname\" ILIKE 'Ab%' ESCAPE '!'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ends",
+      "value": ".com"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" ILIKE '%.com' ESCAPE '!'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "like",
+      "value": "a%b_"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" ILIKE 'a%b_'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_like",
+      "value": "%x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT ILIKE '%x' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" BETWEEN 1 AND 10"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" >= 1"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" <= 10"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a",
+       "b",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" IN ('a', 'b') OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = 'a'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "in",
+      "values": [
+       "1",
+       "2"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" IN (1, 2)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": []
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       "b"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT IN ('a', 'b') OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" <> 'a'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" <> 'a' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = ''"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "not_empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "CAST(\"id\" AS TEXT) <> ''"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "eq",
+      "value": "0000f6e3-20ed-11f0-bca6-005056aabbcc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"ref\" = '0000f6e3-20ed-11f0-bca6-005056aabbcc'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "in",
+      "values": [
+       "0000f6e3-20ed-11f0-bca6-005056aabbcc",
+       "zz"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"ref\" IN ('0000f6e3-20ed-11f0-bca6-005056aabbcc', 'zz')"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "data",
+      "op": "eq",
+      "value": "0xDEADbeef"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"data\" = '\\xdeadbeef'::bytea"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "flag",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"flag\" = '1'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "uid",
+      "op": "contains",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "CAST(\"uid\" AS TEXT) ILIKE '%abc%' ESCAPE '!'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ne",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = ''"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "na`me\"x",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"na`me\"\"x\" = '1'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "any",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "x"
+     },
+     {
+      "col": "name",
+      "op": "ne",
+      "value": "y"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" > 1 OR \"name\" ILIKE '%x%' ESCAPE '!' OR (\"name\" <> 'y' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "a"
+       },
+       {
+        "col": "name",
+        "op": "null"
+       }
+      ]
+     },
+     {
+      "match": "all",
+      "conds": [
+       {
+        "col": "price",
+        "op": "lt",
+        "value": "5"
+       },
+       {
+        "col": "price",
+        "op": "gt",
+        "value": "1"
+       }
+      ]
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "solo"
+       },
+       {
+        "col": "name",
+        "op": "contains",
+        "value": ""
+       }
+      ]
+     },
+     {
+      "op": "eq",
+      "value": "nocol"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" > 1 AND (\"name\" = 'a' OR \"name\" IS NULL) AND \"price\" < 5 AND \"price\" > 1 AND \"name\" = 'solo'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "conds": []
+   },
+   "types": {},
+   "expected": ""
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "5"
+     },
+     {
+      "col": "code",
+      "op": "in",
+      "values": [
+       "1",
+       "x"
+      ]
+     }
+    ]
+   },
+   "types": {},
+   "expected": "\"id\" = '5' AND \"code\" IN ('1', 'x')"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "O'Reilly \\ x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = 'O''Reilly \\ x'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" = 42"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": "42"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = '42'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "code",
+      "op": "eq",
+      "value": "7"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"code\" = 7"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "ne",
+      "value": "5"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"id\" <> 5 OR \"id\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "gt",
+      "value": "9.99"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" > 9.99"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "ge",
+      "value": "-1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" >= -1"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "price",
+      "op": "lt",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"price\" < 'abc'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "le",
+      "value": "3"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" <= 3"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "50%_off!"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" LIKE '%50!%!_off!!%' ESCAPE '!'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "contains",
+      "value": "12"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" LIKE '%12%' ESCAPE '!'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_contains",
+      "value": "test"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT LIKE '%test%' ESCAPE '!' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "pgname",
+      "op": "starts",
+      "value": "Ab"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"pgname\" LIKE 'Ab%' ESCAPE '!'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ends",
+      "value": ".com"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" LIKE '%.com' ESCAPE '!'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "like",
+      "value": "a%b_"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" LIKE 'a%b_'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_like",
+      "value": "%x"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT LIKE '%x' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" BETWEEN 1 AND 10"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" >= 1"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between",
+      "value2": "10"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" <= 10"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "between"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a",
+       "b",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" IN ('a', 'b') OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = 'a'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "in",
+      "values": [
+       "1",
+       "2"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" IN (1, 2)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "in",
+      "values": []
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       "b"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" NOT IN ('a', 'b') OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a",
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" <> 'a'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       "a"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "(\"name\" <> 'a' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_in",
+      "values": [
+       null
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "not_null"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = ''"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "not_empty"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" <> ''"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "eq",
+      "value": "0000f6e3-20ed-11f0-bca6-005056aabbcc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"ref\" = '0000f6e3-20ed-11f0-bca6-005056aabbcc'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "ref",
+      "op": "in",
+      "values": [
+       "0000f6e3-20ed-11f0-bca6-005056aabbcc",
+       "zz"
+      ]
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"ref\" IN ('0000f6e3-20ed-11f0-bca6-005056aabbcc', 'zz')"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "data",
+      "op": "eq",
+      "value": "0xDEADbeef"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"data\" = X'DEADBEEF'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "flag",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"flag\" = '1'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "uid",
+      "op": "contains",
+      "value": "abc"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"uid\" LIKE '%abc%' ESCAPE '!'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "ne",
+      "value": null
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" IS NOT NULL"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "contains",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": ""
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "name",
+      "op": "eq",
+      "value": ""
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" = ''"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "na`me\"x",
+      "op": "eq",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"na`me\"\"x\" = 1"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "any",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "col": "name",
+      "op": "contains",
+      "value": "x"
+     },
+     {
+      "col": "name",
+      "op": "ne",
+      "value": "y"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" > 1 OR \"name\" LIKE '%x%' ESCAPE '!' OR (\"name\" <> 'y' OR \"name\" IS NULL)"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "gt",
+      "value": "1"
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "a"
+       },
+       {
+        "col": "name",
+        "op": "null"
+       }
+      ]
+     },
+     {
+      "match": "all",
+      "conds": [
+       {
+        "col": "price",
+        "op": "lt",
+        "value": "5"
+       },
+       {
+        "col": "price",
+        "op": "gt",
+        "value": "1"
+       }
+      ]
+     },
+     {
+      "match": "any",
+      "conds": [
+       {
+        "col": "name",
+        "op": "eq",
+        "value": "solo"
+       },
+       {
+        "col": "name",
+        "op": "contains",
+        "value": ""
+       }
+      ]
+     },
+     {
+      "op": "eq",
+      "value": "nocol"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"id\" > 1 AND (\"name\" = 'a' OR \"name\" IS NULL) AND \"price\" < 5 AND \"price\" > 1 AND \"name\" = 'solo'"
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "conds": []
+   },
+   "types": {},
+   "expected": ""
+  },
+  {
+   "dialect": "sqlite",
+   "group": {
+    "match": "all",
+    "conds": [
+     {
+      "col": "id",
+      "op": "eq",
+      "value": "5"
+     },
+     {
+      "col": "code",
+      "op": "in",
+      "values": [
+       "1",
+       "x"
+      ]
+     }
+    ]
+   },
+   "types": {},
+   "expected": "\"id\" = 5 AND \"code\" IN (1, 'x')"
+  },
+  {
+   "dialect": "mysql",
+   "group": {
+    "conds": [
+     {
+      "col": "name",
+      "op": "regex",
+      "value": "^a.*z$"
+     },
+     {
+      "col": "id",
+      "op": "regex",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "`name` REGEXP '^a.*z$' AND `id` REGEXP '1'"
+  },
+  {
+   "dialect": "postgres",
+   "group": {
+    "conds": [
+     {
+      "col": "name",
+      "op": "regex",
+      "value": "^a.*z$"
+     },
+     {
+      "col": "id",
+      "op": "regex",
+      "value": "1"
+     }
+    ]
+   },
+   "types": {
+    "id": "int(11)",
+    "name": "varchar(100)",
+    "price": "decimal(10,2)",
+    "ref": "binary(16)",
+    "data": "blob",
+    "code": "",
+    "flag": "boolean",
+    "pgname": "text",
+    "uid": "uuid"
+   },
+   "expected": "\"name\" ~* '^a.*z$' AND CAST(\"id\" AS TEXT) ~* '1'"
+  }
+ ],
+ "queries": [
+  {
+   "dialect": "mysql",
+   "spec": {
+    "from": {
+     "table": "orders"
+    }
+   },
+   "types": {},
+   "expected": "SELECT *\nFROM `orders`"
+  },
+  {
+   "dialect": "mysql",
+   "spec": {
+    "from": {
+     "table": "orders"
+    },
+    "columns": [
+     {
+      "col": "id"
+     },
+     {
+      "col": "total",
+      "as": "Sum Total"
+     }
+    ],
+    "distinct": true,
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "col": "status",
+       "op": "in",
+       "values": [
+        "new",
+        "paid"
+       ]
+      },
+      {
+       "col": "total",
+       "op": "ge",
+       "value": "100"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "col": "id",
+      "dir": "desc"
+     },
+     {
+      "col": "total"
+     }
+    ],
+    "limit": 50
+   },
+   "types": {
+    "orders": {
+     "id": "integer",
+     "total": "numeric(10,2)",
+     "status": "varchar(10)"
+    }
+   },
+   "expected": "SELECT DISTINCT `id`, `total` AS `Sum Total`\nFROM `orders`\nWHERE `status` IN ('new', 'paid') AND `total` >= 100\nORDER BY `id` DESC, `total`\nLIMIT 50"
+  },
+  {
+   "dialect": "mysql",
+   "spec": {
+    "from": {
+     "table": "orders",
+     "as": "o"
+    },
+    "joins": [
+     {
+      "type": "left",
+      "table": "customers",
+      "as": "c",
+      "on": [
+       {
+        "left": {
+         "src": "c",
+         "col": "id"
+        },
+        "right": {
+         "src": "o",
+         "col": "customer_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "c",
+      "col": "name"
+     },
+     {
+      "src": "o",
+      "col": "*",
+      "agg": "count",
+      "as": "orders"
+     },
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "as": "order"
+     }
+    ],
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "src": "c",
+       "col": "name",
+       "op": "starts",
+       "value": "A"
+      },
+      {
+       "src": "o",
+       "col": "total",
+       "op": "gt",
+       "value": "0"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "dir": "desc"
+     }
+    ],
+    "limit": 10
+   },
+   "types": {
+    "o": {
+     "total": "decimal(10,2)"
+    },
+    "customers": {
+     "name": "text"
+    }
+   },
+   "expected": "SELECT c.`name`, COUNT(*) AS orders, SUM(o.`total`) AS `order`\nFROM `orders` AS o\nLEFT JOIN `customers` AS c ON c.`id` = o.`customer_id`\nWHERE c.`name` LIKE 'A%' ESCAPE '!' AND o.`total` > 0\nGROUP BY c.`name`\nORDER BY SUM(o.`total`) DESC\nLIMIT 10"
+  },
+  {
+   "dialect": "mysql",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "joins": [
+     {
+      "type": "inner",
+      "table": "b",
+      "on": [
+       {
+        "left": {
+         "src": "a",
+         "col": "x"
+        },
+        "right": {
+         "src": "b",
+         "col": "x"
+        }
+       },
+       {
+        "left": {
+         "src": "a",
+         "col": "y"
+        },
+        "right": {
+         "src": "b",
+         "col": "y"
+        }
+       }
+      ]
+     },
+     {
+      "type": "right",
+      "table": "c",
+      "as": "Cc",
+      "on": [
+       {
+        "left": {
+         "src": "b",
+         "col": "id"
+        },
+        "right": {
+         "src": "Cc",
+         "col": "b_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "a",
+      "col": "x"
+     },
+     {
+      "src": "Cc",
+      "col": "v",
+      "agg": "count_distinct"
+     },
+     {
+      "src": "b",
+      "col": "z",
+      "agg": "max"
+     },
+     {
+      "col": ""
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT `a`.`x`, COUNT(DISTINCT `Cc`.`v`), MAX(`b`.`z`)\nFROM `a`\nINNER JOIN `b` ON `a`.`x` = `b`.`x` AND `a`.`y` = `b`.`y`\nRIGHT JOIN `c` AS `Cc` ON `b`.`id` = `Cc`.`b_id`\nGROUP BY `a`.`x`"
+  },
+  {
+   "dialect": "mysql",
+   "spec": {
+    "from": {
+     "table": "t",
+     "as": "order"
+    },
+    "columns": [
+     {
+      "col": "id",
+      "agg": "avg"
+     },
+     {
+      "col": "id",
+      "agg": "min",
+      "as": "lo"
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT AVG(`id`), MIN(`id`) AS lo\nFROM `t` AS `order`"
+  },
+  {
+   "dialect": "postgres",
+   "spec": {
+    "from": {
+     "table": "orders"
+    }
+   },
+   "types": {},
+   "expected": "SELECT *\nFROM \"public\".\"orders\""
+  },
+  {
+   "dialect": "postgres",
+   "spec": {
+    "from": {
+     "table": "orders"
+    },
+    "columns": [
+     {
+      "col": "id"
+     },
+     {
+      "col": "total",
+      "as": "Sum Total"
+     }
+    ],
+    "distinct": true,
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "col": "status",
+       "op": "in",
+       "values": [
+        "new",
+        "paid"
+       ]
+      },
+      {
+       "col": "total",
+       "op": "ge",
+       "value": "100"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "col": "id",
+      "dir": "desc"
+     },
+     {
+      "col": "total"
+     }
+    ],
+    "limit": 50
+   },
+   "types": {
+    "orders": {
+     "id": "integer",
+     "total": "numeric(10,2)",
+     "status": "varchar(10)"
+    }
+   },
+   "expected": "SELECT DISTINCT \"id\", \"total\" AS \"Sum Total\"\nFROM \"public\".\"orders\"\nWHERE \"status\" IN ('new', 'paid') AND \"total\" >= 100\nORDER BY \"id\" DESC, \"total\"\nLIMIT 50"
+  },
+  {
+   "dialect": "postgres",
+   "spec": {
+    "from": {
+     "table": "orders",
+     "as": "o"
+    },
+    "joins": [
+     {
+      "type": "left",
+      "table": "customers",
+      "as": "c",
+      "on": [
+       {
+        "left": {
+         "src": "c",
+         "col": "id"
+        },
+        "right": {
+         "src": "o",
+         "col": "customer_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "c",
+      "col": "name"
+     },
+     {
+      "src": "o",
+      "col": "*",
+      "agg": "count",
+      "as": "orders"
+     },
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "as": "order"
+     }
+    ],
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "src": "c",
+       "col": "name",
+       "op": "starts",
+       "value": "A"
+      },
+      {
+       "src": "o",
+       "col": "total",
+       "op": "gt",
+       "value": "0"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "dir": "desc"
+     }
+    ],
+    "limit": 10
+   },
+   "types": {
+    "o": {
+     "total": "decimal(10,2)"
+    },
+    "customers": {
+     "name": "text"
+    }
+   },
+   "expected": "SELECT c.\"name\", COUNT(*) AS orders, SUM(o.\"total\") AS \"order\"\nFROM \"public\".\"orders\" AS o\nLEFT JOIN \"public\".\"customers\" AS c ON c.\"id\" = o.\"customer_id\"\nWHERE c.\"name\" ILIKE 'A%' ESCAPE '!' AND o.\"total\" > 0\nGROUP BY c.\"name\"\nORDER BY SUM(o.\"total\") DESC\nLIMIT 10"
+  },
+  {
+   "dialect": "postgres",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "joins": [
+     {
+      "type": "inner",
+      "table": "b",
+      "on": [
+       {
+        "left": {
+         "src": "a",
+         "col": "x"
+        },
+        "right": {
+         "src": "b",
+         "col": "x"
+        }
+       },
+       {
+        "left": {
+         "src": "a",
+         "col": "y"
+        },
+        "right": {
+         "src": "b",
+         "col": "y"
+        }
+       }
+      ]
+     },
+     {
+      "type": "right",
+      "table": "c",
+      "as": "Cc",
+      "on": [
+       {
+        "left": {
+         "src": "b",
+         "col": "id"
+        },
+        "right": {
+         "src": "Cc",
+         "col": "b_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "a",
+      "col": "x"
+     },
+     {
+      "src": "Cc",
+      "col": "v",
+      "agg": "count_distinct"
+     },
+     {
+      "src": "b",
+      "col": "z",
+      "agg": "max"
+     },
+     {
+      "col": ""
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT \"public\".\"a\".\"x\", COUNT(DISTINCT \"Cc\".\"v\"), MAX(\"public\".\"b\".\"z\")\nFROM \"public\".\"a\"\nINNER JOIN \"public\".\"b\" ON \"public\".\"a\".\"x\" = \"public\".\"b\".\"x\" AND \"public\".\"a\".\"y\" = \"public\".\"b\".\"y\"\nRIGHT JOIN \"public\".\"c\" AS \"Cc\" ON \"public\".\"b\".\"id\" = \"Cc\".\"b_id\"\nGROUP BY \"public\".\"a\".\"x\""
+  },
+  {
+   "dialect": "postgres",
+   "spec": {
+    "from": {
+     "table": "t",
+     "as": "order"
+    },
+    "columns": [
+     {
+      "col": "id",
+      "agg": "avg"
+     },
+     {
+      "col": "id",
+      "agg": "min",
+      "as": "lo"
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT AVG(\"id\"), MIN(\"id\") AS lo\nFROM \"public\".\"t\" AS \"order\""
+  },
+  {
+   "dialect": "sqlite",
+   "spec": {
+    "from": {
+     "table": "orders"
+    }
+   },
+   "types": {},
+   "expected": "SELECT *\nFROM \"orders\""
+  },
+  {
+   "dialect": "sqlite",
+   "spec": {
+    "from": {
+     "table": "orders"
+    },
+    "columns": [
+     {
+      "col": "id"
+     },
+     {
+      "col": "total",
+      "as": "Sum Total"
+     }
+    ],
+    "distinct": true,
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "col": "status",
+       "op": "in",
+       "values": [
+        "new",
+        "paid"
+       ]
+      },
+      {
+       "col": "total",
+       "op": "ge",
+       "value": "100"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "col": "id",
+      "dir": "desc"
+     },
+     {
+      "col": "total"
+     }
+    ],
+    "limit": 50
+   },
+   "types": {
+    "orders": {
+     "id": "integer",
+     "total": "numeric(10,2)",
+     "status": "varchar(10)"
+    }
+   },
+   "expected": "SELECT DISTINCT \"id\", \"total\" AS \"Sum Total\"\nFROM \"orders\"\nWHERE \"status\" IN ('new', 'paid') AND \"total\" >= 100\nORDER BY \"id\" DESC, \"total\"\nLIMIT 50"
+  },
+  {
+   "dialect": "sqlite",
+   "spec": {
+    "from": {
+     "table": "orders",
+     "as": "o"
+    },
+    "joins": [
+     {
+      "type": "left",
+      "table": "customers",
+      "as": "c",
+      "on": [
+       {
+        "left": {
+         "src": "c",
+         "col": "id"
+        },
+        "right": {
+         "src": "o",
+         "col": "customer_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "c",
+      "col": "name"
+     },
+     {
+      "src": "o",
+      "col": "*",
+      "agg": "count",
+      "as": "orders"
+     },
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "as": "order"
+     }
+    ],
+    "where": {
+     "match": "all",
+     "conds": [
+      {
+       "src": "c",
+       "col": "name",
+       "op": "starts",
+       "value": "A"
+      },
+      {
+       "src": "o",
+       "col": "total",
+       "op": "gt",
+       "value": "0"
+      }
+     ]
+    },
+    "orderBy": [
+     {
+      "src": "o",
+      "col": "total",
+      "agg": "sum",
+      "dir": "desc"
+     }
+    ],
+    "limit": 10
+   },
+   "types": {
+    "o": {
+     "total": "decimal(10,2)"
+    },
+    "customers": {
+     "name": "text"
+    }
+   },
+   "expected": "SELECT c.\"name\", COUNT(*) AS orders, SUM(o.\"total\") AS \"order\"\nFROM \"orders\" AS o\nLEFT JOIN \"customers\" AS c ON c.\"id\" = o.\"customer_id\"\nWHERE c.\"name\" LIKE 'A%' ESCAPE '!' AND o.\"total\" > 0\nGROUP BY c.\"name\"\nORDER BY SUM(o.\"total\") DESC\nLIMIT 10"
+  },
+  {
+   "dialect": "sqlite",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "joins": [
+     {
+      "type": "inner",
+      "table": "b",
+      "on": [
+       {
+        "left": {
+         "src": "a",
+         "col": "x"
+        },
+        "right": {
+         "src": "b",
+         "col": "x"
+        }
+       },
+       {
+        "left": {
+         "src": "a",
+         "col": "y"
+        },
+        "right": {
+         "src": "b",
+         "col": "y"
+        }
+       }
+      ]
+     },
+     {
+      "type": "right",
+      "table": "c",
+      "as": "Cc",
+      "on": [
+       {
+        "left": {
+         "src": "b",
+         "col": "id"
+        },
+        "right": {
+         "src": "Cc",
+         "col": "b_id"
+        }
+       }
+      ]
+     }
+    ],
+    "columns": [
+     {
+      "src": "a",
+      "col": "x"
+     },
+     {
+      "src": "Cc",
+      "col": "v",
+      "agg": "count_distinct"
+     },
+     {
+      "src": "b",
+      "col": "z",
+      "agg": "max"
+     },
+     {
+      "col": ""
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT \"a\".\"x\", COUNT(DISTINCT \"Cc\".\"v\"), MAX(\"b\".\"z\")\nFROM \"a\"\nINNER JOIN \"b\" ON \"a\".\"x\" = \"b\".\"x\" AND \"a\".\"y\" = \"b\".\"y\"\nRIGHT JOIN \"c\" AS \"Cc\" ON \"b\".\"id\" = \"Cc\".\"b_id\"\nGROUP BY \"a\".\"x\""
+  },
+  {
+   "dialect": "sqlite",
+   "spec": {
+    "from": {
+     "table": "t",
+     "as": "order"
+    },
+    "columns": [
+     {
+      "col": "id",
+      "agg": "avg"
+     },
+     {
+      "col": "id",
+      "agg": "min",
+      "as": "lo"
+     }
+    ]
+   },
+   "types": {},
+   "expected": "SELECT AVG(\"id\"), MIN(\"id\") AS lo\nFROM \"t\" AS \"order\""
+  }
+ ],
+ "values": [
+  {
+   "dialect": "mysql",
+   "table": "orders",
+   "col": "status",
+   "where": "",
+   "search": "",
+   "type": "",
+   "limit": 200,
+   "expected": "SELECT `status`, COUNT(*) FROM `orders` GROUP BY `status` ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "mysql",
+   "table": "crm.orders",
+   "col": "name",
+   "where": "id > 5",
+   "search": "a%",
+   "type": "varchar(10)",
+   "limit": 200,
+   "expected": "SELECT `name`, COUNT(*) FROM `crm.orders` WHERE (id > 5) AND `name` LIKE '%a!%%' ESCAPE '!' GROUP BY `name` ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "mysql",
+   "table": "orders",
+   "col": "id",
+   "where": "",
+   "search": "1",
+   "type": "integer",
+   "limit": 200,
+   "expected": "SELECT `id`, COUNT(*) FROM `orders` WHERE `id` LIKE '%1%' ESCAPE '!' GROUP BY `id` ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "postgres",
+   "table": "orders",
+   "col": "status",
+   "where": "",
+   "search": "",
+   "type": "",
+   "limit": 200,
+   "expected": "SELECT \"status\", COUNT(*) FROM \"public\".\"orders\" GROUP BY \"status\" ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "postgres",
+   "table": "crm.orders",
+   "col": "name",
+   "where": "id > 5",
+   "search": "a%",
+   "type": "varchar(10)",
+   "limit": 200,
+   "expected": "SELECT \"name\", COUNT(*) FROM \"crm\".\"orders\" WHERE (id > 5) AND \"name\" ILIKE '%a!%%' ESCAPE '!' GROUP BY \"name\" ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "postgres",
+   "table": "orders",
+   "col": "id",
+   "where": "",
+   "search": "1",
+   "type": "integer",
+   "limit": 200,
+   "expected": "SELECT \"id\", COUNT(*) FROM \"public\".\"orders\" WHERE CAST(\"id\" AS TEXT) ILIKE '%1%' ESCAPE '!' GROUP BY \"id\" ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "sqlite",
+   "table": "orders",
+   "col": "status",
+   "where": "",
+   "search": "",
+   "type": "",
+   "limit": 200,
+   "expected": "SELECT \"status\", COUNT(*) FROM \"orders\" GROUP BY \"status\" ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "sqlite",
+   "table": "crm.orders",
+   "col": "name",
+   "where": "id > 5",
+   "search": "a%",
+   "type": "varchar(10)",
+   "limit": 200,
+   "expected": "SELECT \"name\", COUNT(*) FROM \"crm.orders\" WHERE (id > 5) AND \"name\" LIKE '%a!%%' ESCAPE '!' GROUP BY \"name\" ORDER BY 2 DESC, 1 LIMIT 200"
+  },
+  {
+   "dialect": "sqlite",
+   "table": "orders",
+   "col": "id",
+   "where": "",
+   "search": "1",
+   "type": "integer",
+   "limit": 200,
+   "expected": "SELECT \"id\", COUNT(*) FROM \"orders\" WHERE \"id\" LIKE '%1%' ESCAPE '!' GROUP BY \"id\" ORDER BY 2 DESC, 1 LIMIT 200"
+  }
+ ],
+ "errors": [
+  {
+   "dialect": "sqlite",
+   "kind": "filter",
+   "group": {
+    "conds": [
+     {
+      "col": "a",
+      "op": "regex",
+      "value": "x"
+     }
+    ]
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "filter",
+   "group": {
+    "conds": [
+     {
+      "col": "a",
+      "op": "nope",
+      "value": "x"
+     }
+    ]
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "query",
+   "spec": {
+    "from": {}
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "query",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "joins": [
+     {
+      "table": "b",
+      "on": []
+     }
+    ]
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "query",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "joins": [
+     {
+      "table": "b",
+      "on": [
+       {
+        "left": {
+         "src": "zz",
+         "col": "id"
+        },
+        "right": {
+         "src": "b",
+         "col": "id"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "query",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "columns": [
+     {
+      "col": "x",
+      "agg": "median"
+     }
+    ]
+   }
+  },
+  {
+   "dialect": "mysql",
+   "kind": "query",
+   "spec": {
+    "from": {
+     "table": "a"
+    },
+    "columns": [
+     {
+      "col": "*",
+      "agg": "sum"
+     }
+    ]
+   }
+  }
+ ]
+}
