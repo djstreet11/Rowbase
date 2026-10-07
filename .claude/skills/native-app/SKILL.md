@@ -39,6 +39,14 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
   also invisible to cacheDisplay snapshots). The window toolbar is NOT captured by snapshots — ask the user to check it.
 - Extra snapshot envs: `ROWBASE_SNAPSHOT_DB=name` (switch database first), `ROWBASE_SNAPSHOT_INSPECT=1` (inspector on row 0), `ROWBASE_SNAPSHOT_COMPLETE="sql…"` (autocomplete,
   writes `-popup.png`).
+- Filters/builder snapshot envs: `ROWBASE_SNAPSHOT_FILTERS='<FilterGroup JSON>'` (set before first load), `ROWBASE_SNAPSHOT_FILTER_POP=col`
+  (real header-button path → `-filterpop.png`, content view only: popover material renders as garbage), `ROWBASE_SNAPSHOT_CELLMENU=col:row:prefix`
+  (builds the real cell context menu, runs the item whose title starts with prefix), `ROWBASE_SNAPSHOT_BUILDER=1` (builder from the table tab,
+  `ROWBASE_SNAPSHOT_RUN=1` runs it) / `=demo` (orders ⟕ customers via FK suggestion + aggregates, runs). Every snapshot prints
+  `ROWBASE_SQL` / `ROWBASE_COUNT_SQL` / `ROWBASE_EXPORT_SQL` / `ROWBASE_ROWS` / `ROWBASE_ERROR` to stdout — compare with psql/mysql/sqlite3.
+- Column filters: `WorkTab.filters` (FilterGroup) → `effectiveWhere()`; a filter that can't become SQL must error (loadTable) or block
+  (`AppState.filtersOK` for count/export/open-in-editor), never be dropped. Builder: `QBModel` (source ids) → `.spec` (QuerySpec) →
+  `QueryBuilder.selectSQL`; `WorkTab.isQuery` = not a table tab (SQL or builder), `isBuilder` for the builder.
 - Cancel: `Engine.execute(…, runID:)` + `Engine.cancel(runID)`; WorkTab.runID; ⌘. / Stop button.
 - SSH: `Connection.ssh` → TunnelManager (system ssh, ROWBASE_SSH override, tests use tests/fixtures/fake_ssh.py);
   `TunnelManager.shutdown()` on app terminate.

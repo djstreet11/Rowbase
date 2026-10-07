@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-04 (Apache-2.0, MCP server, one-file builds, pg8000).
+> Last update: 2026-10-07 (column filters + visual query builder in both tracks, Linux .deb).
 
 ## 1. Origin & idea
 
@@ -117,7 +117,8 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
     Sources/RowbaseCore   Models (Connection, Dialect, QueryResult, TableInfo), Store (+Keychain, URL parsing), Guard (port),
                           Driver (DBSession protocol + Catalog SQL), SQLite/Postgres/MySQL sessions, Engine actor (+History)
     Sources/Rowbase       App, AppState, WorkTab, Sidebar, TabBar, TableTab, Structure, QueryTab, ResultGrid, SQLEditor,
-                          RowInspector, ConnectionsSheet, HistorySheet
+                          RowInspector, ConnectionsSheet, HistorySheet, FilterViews (filter popover + chips),
+                          BuilderModel / BuilderTabView (visual query builder)
     Tests/RowbaseCoreTests  guard conformance (shared JSON), store/URL, engine on real SQLite/PG/MariaDB
   ```
 - **Features (MVP)**: shared connection store + Keychain, connection manager sheet (URL paste, test, RO toggle, env/color/group),
@@ -131,6 +132,12 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
 - **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
 - **Parity with web UI**: reached 2026-10-04 (transpose, column picker, WHERE/ORDER BY autocomplete, EXPLAIN ANALYZE, tab restore,
   tables/views filter, history errors filter, MySQL EXPLAIN highlight). Editing + export in both tracks.
+  Since 2026-10-07: column filters (header funnel button → popover with every operator and a searchable value list with counts
+  from `QueryBuilder.valuesSQL`, other filters applied; fallback = loaded rows; chips with all/any; right-click cell → = ≠ contains
+  > < is NULL; effective WHERE = `(raw WHERE) AND (filters)` for data, COUNT, export, "Open in SQL Editor"; persisted with the tab)
+  and a "Query Builder" tab (from + FK-suggested joins with plain-language types, columns with count/sum/avg/min/max and implicit
+  GROUP BY, conditions with the same operators/value picker, sort incl. aggregates, limit, live highlighted SQL, Run → normal grid,
+  Edit as SQL; opened from the toolbar, ⌥⌘T, or a table tab's "…" menu carrying its column filters).
 - **Gaps (both)**: no structure (DDL) editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
   (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
 - **Distribution**: `native/scripts/release.sh` → DMG (app + Applications link + volume icon), generated app icon, version in
