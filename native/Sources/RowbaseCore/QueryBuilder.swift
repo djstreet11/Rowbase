@@ -36,7 +36,11 @@ public struct QueryColumn: Codable, Sendable, Equatable {
 }
 
 public struct QuerySource: Codable, Sendable, Equatable {
-    public struct Pair: Codable, Sendable, Equatable { public var left: QueryColumn; public var right: QueryColumn }
+    public struct Pair: Codable, Sendable, Equatable {
+        public var left: QueryColumn
+        public var right: QueryColumn
+        public init(left: QueryColumn, right: QueryColumn) { (self.left, self.right) = (left, right) }
+    }
     public var table: String?
     public var `as`: String?
     public var type: String?
