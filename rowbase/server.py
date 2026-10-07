@@ -303,8 +303,28 @@ def make_server(port=8765):
     return ThreadingHTTPServer(("127.0.0.1", port), Handler)
 
 
+def _running(port):
+    """Version of a Rowbase UI already listening on this port, else None."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/version", headers={"X-Rowbase": "1"})
+        with urllib.request.urlopen(req, timeout=2) as r:
+            return json.loads(r.read()).get("current")
+    except Exception:
+        return None
+
+
 def serve(port=8765, open_browser=True):
-    srv = make_server(port)
+    try:
+        srv = make_server(port)
+    except OSError:
+        if _running(port):  # launched again (app menu, double-click): reuse the running UI
+            url = f"http://127.0.0.1:{port}/"
+            print(f"Rowbase UI is already running: {url}")
+            if open_browser:
+                webbrowser.open(url)
+            return
+        srv = make_server(0)  # port taken by something else
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
     print(f"Rowbase UI: {url}  (Ctrl+C to stop)")
     if open_browser:

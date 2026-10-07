@@ -46,7 +46,9 @@ def executable():
 def install_kind():
     exe = executable()
     if exe:
-        return "app" if re.search(r"\.app/Contents/Resources/", exe) else "onefile"
+        if re.search(r"\.app/Contents/Resources/", exe):
+            return "app"
+        return "deb" if exe.startswith("/usr/") and os.path.exists("/var/lib/dpkg/info/rowbase.list") else "onefile"
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if os.path.isdir(os.path.join(here, ".git")):
         return "source"
@@ -61,6 +63,7 @@ HOW = {
     "pip": "python -m pip install -U rowbase-db",
     "source": "git pull && pip install -e .",
     "onefile": "rowbase update",
+    "deb": "download the new rowbase_<version>_<arch>.deb from the release page and open it (or: sudo apt install ./rowbase_*.deb)",
 }
 
 
