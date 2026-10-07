@@ -74,6 +74,10 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - NEVER give a Swift `NSCell` subclass (header/data cells) stored object properties (String, class refs): AppKit copies cells
   with NSCopyObject (bitwise, no retain) — e.g. NSTableHeaderView's filler cell — → double release, heap corruption, crash
   (v0.2.2 on macOS 15). Put the data in `representedObject` (see GridHeaderInfo in ResultGrid.swift).
+- SwiftUI `Picker` re-diffs every menu item on each model change: 8 column pickers × 70 columns made the query builder take
+  ~300 ms per keystroke. Use `PopUpPicker` (BuilderTabView.swift: NSPopUpButton, menu rebuilt only when options change, size
+  cached — NSPopUpButton.intrinsicContentSize measures every item). Builder perf hook: `ROWBASE_SNAPSHOT_CONN=wide
+  ROWBASE_SNAPSHOT_BUILDER=bench [ROWBASE_SNAPSHOT_BENCH_N=40]` prints ms per edit (was 304, now ~21 in debug).
 - SwiftUI row Bindings (`ForEach($model.items) { $x in … }`): a button action must NOT read `$x`/`x` while mutating the same array
   (`items.removeAll { $0.id == x.id }` → "Simultaneous accesses … Fatal access conflict", user crash 2026-10-07). Capture
   `let id = x.id` while rendering and use it in the action. Repro hook: `ROWBASE_SNAPSHOT_BUILDER=demo ROWBASE_SNAPSHOT_PRESS_REMOVE=6`.
