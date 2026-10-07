@@ -74,6 +74,9 @@ Then view the PNG with Read (sheet → `…-sheet.png`). Use scratch home so the
 - NEVER give a Swift `NSCell` subclass (header/data cells) stored object properties (String, class refs): AppKit copies cells
   with NSCopyObject (bitwise, no retain) — e.g. NSTableHeaderView's filler cell — → double release, heap corruption, crash
   (v0.2.2 on macOS 15). Put the data in `representedObject` (see GridHeaderInfo in ResultGrid.swift).
+- SwiftUI row Bindings (`ForEach($model.items) { $x in … }`): a button action must NOT read `$x`/`x` while mutating the same array
+  (`items.removeAll { $0.id == x.id }` → "Simultaneous accesses … Fatal access conflict", user crash 2026-10-07). Capture
+  `let id = x.id` while rendering and use it in the action. Repro hook: `ROWBASE_SNAPSHOT_BUILDER=demo ROWBASE_SNAPSHOT_PRESS_REMOVE=6`.
 - NEVER use SwiftUI `.textSelection(.enabled)` — use `SelectableText` (Util.swift, AppKit NSTextField). A user crash on macOS 15.0.1
   (pointer-auth trap in CoreText while SwiftUI released selectable text whose content changed, 2026-10-05) led to this rule.
   We develop on macOS 26 — test-sensitive UI paths may behave differently on macOS 14/15; ask the user for crash reports there.
