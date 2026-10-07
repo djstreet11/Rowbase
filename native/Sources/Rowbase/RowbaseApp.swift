@@ -32,6 +32,9 @@ struct RowbaseApp: App {
             }
             CommandGroup(replacing: .newItem) {
                 Button("New SQL Tab") { state.openQuery() }.keyboardShortcut("t")
+                Button("New Query Builder") {
+                    if let t = state.activeTab, !t.isQuery { state.openBuilder(from: t) } else { state.openBuilder() }
+                }.keyboardShortcut("t", modifiers: [.command, .option])
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Close Tab") {

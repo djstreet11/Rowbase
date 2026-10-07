@@ -42,8 +42,9 @@ struct MoreMenu: View {
                 .disabled(tab.result == nil)
             if !tab.isQuery {
                 Divider()
-                Button("Open in SQL Editor") { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) }
+                Button("Open in SQL Editor") { if state.filtersOK(tab) { state.openQuery(sql: tab.buildSQL(), connection: tab.connection) } }
                 Button("Count Rows") { Task { await state.count(tab) } }
+                Button("Open in Query Builder") { state.openBuilder(from: tab) }
             }
         } label: {
             IconMenuLabel(symbol: "ellipsis.circle")

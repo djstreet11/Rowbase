@@ -38,6 +38,9 @@ struct AppToolbar: ToolbarContent {
             Button { state.openQuery() } label: { Image(systemName: "plus") }
                 .disabled(state.selectedConnection == nil)
                 .help("New Query (⌘T)")
+            Button { state.openBuilder() } label: { Image(systemName: "square.grid.3x1.below.line.grid.1x2") }
+                .disabled(state.selectedConnection == nil || state.needsDatabase)
+                .help("New Query Builder (⌥⌘T) — build a SELECT without writing SQL")
             Button { state.showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
                 .help("History (⌘Y)")
             Button { state.showAIMCP = true } label: { Image(systemName: "sparkles") }

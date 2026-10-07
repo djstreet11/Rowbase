@@ -69,6 +69,7 @@ struct DetailView: View {
                     switch tab.kind {
                     case .table: TableTabView(state: state, tab: tab).id(tab.id)
                     case .query: QueryTabView(state: state, tab: tab).id(tab.id)
+                    case .builder: BuilderTabView(state: state, tab: tab).id(tab.id)
                     }
                 } else {
                     EmptyTabState()
@@ -83,7 +84,8 @@ struct DetailView: View {
 }
 
 struct EmptyTabState: View {
-    private let shortcuts: [(String, String)] = [("⌘P", "Find table"), ("⌘T", "New query"), ("⇧⌘K", "Connections"), ("⌘Y", "History")]
+    private let shortcuts: [(String, String)] = [("⌘P", "Find table"), ("⌘T", "New query"), ("⌥⌘T", "Query builder"), ("⇧⌘K", "Connections"),
+                                                 ("⌘Y", "History")]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -130,7 +132,10 @@ struct StatusBar: View {
                                 .frame(maxWidth: 480, alignment: .leading)
                             HStack {
                                 Button("Copy") { copyToPasteboard(t.buildSQL()) }
-                                Button("Open in SQL Editor") { showSQL = false; state.openQuery(sql: t.buildSQL(), connection: t.connection) }
+                                Button("Open in SQL Editor") {
+                                    showSQL = false
+                                    if state.filtersOK(t) { state.openQuery(sql: t.buildSQL(), connection: t.connection) }
+                                }
                             }.controlSize(.small)
                         }.padding(12)
                     }

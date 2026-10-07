@@ -174,7 +174,7 @@ extension WorkTab {
     /// Whole filtered table (no LIMIT/OFFSET) — what Export runs for table tabs.
     func exportSQL() -> String {
         var s = "SELECT * FROM \(fromClause)"
-        let w = Self.strip(whereText, "WHERE")
+        let w = safeWhere
         if !w.isEmpty { s += " WHERE \(w)" }
         let o = effectiveOrder
         if !o.isEmpty { s += " ORDER BY \(o)" }

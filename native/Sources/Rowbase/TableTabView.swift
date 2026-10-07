@@ -10,6 +10,7 @@ struct TableTabView: View {
             if !tab.breadcrumbs.isEmpty { crumbs; Divider() }
             toolbar
             Divider()
+            if !(tab.filters.conds ?? []).isEmpty && !tab.showStructure { FilterChips(state: state, tab: tab); Divider() }
             if tab.canEdit { PendingStrip(state: state, tab: tab) }
             if tab.showStructure {
                 StructureView(state: state, tab: tab)

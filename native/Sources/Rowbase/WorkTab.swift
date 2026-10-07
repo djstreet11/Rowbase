@@ -13,12 +13,16 @@ struct Crumb: Hashable, Identifiable {
 
 @MainActor @Observable
 final class WorkTab: Identifiable {
-    enum Kind: Equatable { case table(String), query }
+    enum Kind: Equatable { case table(String), query, builder }
 
     let id = UUID()
     let kind: Kind
     var connection: Connection
     var whereText = ""
+    /// Column filters (table tabs): AND-ed with the raw WHERE text. Contract: QueryBuilder.filterWhere.
+    var filters = FilterGroup(match: "all", conds: [])
+    /// Visual query builder model (builder tabs).
+    var builder = QBModel()
     var orderText = ""
     var limit = 100
     var offset = 0
@@ -70,7 +74,7 @@ final class WorkTab: Identifiable {
     init(kind: Kind, connection: Connection) {
         self.kind = kind
         self.connection = connection
-        if kind == .query { limit = 500 }
+        if tableName == nil { limit = 500 }
         if let k = hiddenKey { hidden = Set(AppDefaults.store.stringArray(forKey: k) ?? []) }
     }
 
@@ -95,15 +99,20 @@ final class WorkTab: Identifiable {
     }
 
     var tableName: String? { if case .table(let t) = kind { t } else { nil } }
-    var isQuery: Bool { kind == .query }
+    /// Not a table tab: SQL console or query builder (results come from a statement, not table paging).
+    var isQuery: Bool { tableName == nil }
+    var isBuilder: Bool { kind == .builder }
 
     var title: String {
         switch kind {
         case .table(let t):
             if let label, whereText == labelWhere { return "\(t) · \(label)" }
             let w = Self.strip(whereText, "WHERE")
-            return w.isEmpty ? t : "\(t) · \(w)"
+            let f = filters.conds?.count ?? 0
+            let base = w.isEmpty ? t : "\(t) · \(w)"
+            return f == 0 ? base : "\(base) · \(plural(f, "filter"))"
         case .query: return "SQL"
+        case .builder: return builder.from.table.isEmpty ? "Query Builder" : "Builder · \(builder.from.table)"
         }
     }
 
@@ -117,8 +126,28 @@ final class WorkTab: Identifiable {
         return t
     }
 
+    var columnTypes: [String: String] {
+        Dictionary((info?.columns ?? []).map { ($0.name, $0.type) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// Column filters → condition text ('' when none). `without`: leave out that column's filter (value list of its popover).
+    func filterSQL(without: String? = nil, group: FilterGroup? = nil) throws -> String {
+        var g = group ?? filters
+        if let without { g.conds = g.conds?.filter { $0.col != without } }
+        return try QueryBuilder.filterWhere(connection.dialect, g, types: columnTypes)
+    }
+
+    /// Raw WHERE text AND column filters — used by data, COUNT, export and "Open in SQL Editor".
+    func effectiveWhere(without: String? = nil) throws -> String {
+        let w = Self.strip(whereText, "WHERE"), f = try filterSQL(without: without)
+        return !w.isEmpty && !f.isEmpty ? "(\(w)) AND (\(f))" : w.isEmpty ? f : w
+    }
+    var safeWhere: String { (try? effectiveWhere()) ?? Self.strip(whereText, "WHERE") }
+
+    func filter(on column: String) -> FilterCond? { filters.conds?.first { $0.col == column } }
+
     var defaultOrder: String {
-        let w = Self.strip(whereText, "WHERE")
+        let w = safeWhere
         if w.isEmpty, let pk = info?.primaryKey, pk.count == 1 { return connection.dialect.column(pk[0]) + " DESC" }
         return ""
     }
@@ -136,7 +165,7 @@ final class WorkTab: Identifiable {
     func buildSQL(extra: Int = 0) -> String {
         guard tableName != nil else { return sql }
         var s = "SELECT * FROM \(fromClause)"
-        let w = Self.strip(whereText, "WHERE")
+        let w = safeWhere
         if !w.isEmpty { s += " WHERE \(w)" }
         let o = effectiveOrder
         if !o.isEmpty { s += " ORDER BY \(o)" }
@@ -147,7 +176,7 @@ final class WorkTab: Identifiable {
 
     func countSQL() -> String {
         var s = "SELECT COUNT(*) FROM \(fromClause)"
-        let w = Self.strip(whereText, "WHERE")
+        let w = safeWhere
         if !w.isEmpty { s += " WHERE \(w)" }
         return s
     }
