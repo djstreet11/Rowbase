@@ -94,3 +94,12 @@ short: facts and rules only, no history.
 - 2026-10-05: Don't `pkill -f <pattern>` in a Bash call whose own command line contains the pattern — it kills the shell (exit 144).
 - 2026-10-05: Sparkle update verified on this Mac (ad-hoc 0.2.4 → 0.2.98): works; ad-hoc builds re-trigger the Keychain prompt on first
   connect after an update (expected until Developer ID). Running the bundled app writes SU* keys into the real dev.rowbase.Rowbase defaults.
+- 2026-10-07: Column filters + visual query builder: SQL generated in rowbase/query.py / QueryBuilder.swift (vectors
+  tests/query_vectors.json); web UI only sends structured filters/specs to /api/build; native UI builds SQL in-process.
+- 2026-10-07: Ubuntu users can't double-click a downloaded one-file binary (no exec bit) → releases ship a .deb
+  (packaging/make-deb.sh) + packaging/install.sh (~/.local, no root). `rowbase ui` reuses an already running instance.
+- 2026-10-07: Cloud sessions (Linux): no Swift toolchain — Swift is verified only by CI (macos job); PG/MariaDB via apt + `service … start`.
+- 2026-10-07: macOS 26 SwiftUI: menu Pickers don't stretch to a `.frame(width:)` (they float, leaving gaps) → `.fixedSize()`;
+  a ScrollView whose content is wider than the viewport centers and clips it → `[.vertical, .horizontal]` + `.defaultScrollAnchor(.topLeading)`.
+- 2026-10-07: Scratch fixture for filters/builder: `shop` (customers + orders with FK, NULLs/'' values) in `.scratch-home/shop.db`
+  and DB `rowbase_scratch` on MariaDB/PG; connections "shop lite/my/pg" in the scratch store. Never use `rowbase_test` (tests drop it).

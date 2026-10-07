@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Rowbase
+GenericName=Database Client
+Comment=Fast, safe-by-default client for MySQL, PostgreSQL and SQLite
+Exec=rowbase ui
+Icon=rowbase
+Terminal=false
+Categories=Development;Database;
+Keywords=database;sql;mysql;mariadb;postgres;postgresql;sqlite;query;
+StartupNotify=false

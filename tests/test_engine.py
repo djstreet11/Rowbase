@@ -132,6 +132,31 @@ class Base:
         with self.assertRaises(QueryError):
             engine.table_info(self.ro, "nope")
 
+    def test_query_builder_runs(self):  # rowbase/query.py output is valid SQL on every dialect and passes the RO guard
+        from rowbase import query
+        drv, info = engine.dialect(self.ro), engine.table_info(self.ro, self.orders)
+        types = {c["name"]: c["type"] for c in info["columns"]}
+        count = lambda conds, match="all": len(engine.execute(self.ro, f"SELECT id FROM {drv.ident(self.orders)} WHERE "
+                                                              + query.filter_where(drv, {"match": match, "conds": conds}, types))["rows"])
+        self.assertEqual(count([{"col": "note", "op": "contains", "value": "50%"}]), 1)
+        self.assertEqual(count([{"col": "note", "op": "contains", "value": "IT'S"}]), 1)  # case-insensitive
+        self.assertEqual(count([{"col": "note", "op": "not_contains", "value": "50%"}]), 2)  # keeps NULL
+        self.assertEqual(count([{"col": "note", "op": "in", "values": ["it's", None]}]), 2)
+        self.assertEqual(count([{"col": "total", "op": "between", "value": "3", "value2": "8"}]), 2)
+        self.assertEqual(count([{"col": "user_id", "op": "ne", "value": "1"}, {"col": "id", "op": "contains", "value": "1"}], "any"), 2)
+        self.assertEqual(count([{"col": "total", "op": "gt", "value": "5"}, {"col": "note", "op": "empty"}]), 0)
+        if self.driver != "sqlite":
+            self.assertEqual(count([{"col": "note", "op": "regex", "value": "^[0-9]+%"}]), 1)
+        r = engine.execute(self.ro, query.values_sql(drv, self.orders, "user_id", "total > 1", "", types["user_id"]))
+        self.assertEqual([list(x) for x in r["rows"]], [[1, 2], [2, 1]])
+        spec = {"from": {"table": "users", "as": "u"},
+                "joins": [{"type": "left", "table": self.orders, "as": "o", "on": [{"left": {"src": "o", "col": "user_id"}, "right": {"src": "u", "col": "id"}}]}],
+                "columns": [{"src": "u", "col": "name"}, {"src": "o", "col": "*", "agg": "count", "as": "n"}, {"src": "o", "col": "total", "agg": "sum", "as": "s"}],
+                "where": {"conds": [{"src": "u", "col": "name", "op": "starts", "value": "A"}]}, "orderBy": [{"src": "u", "col": "name"}], "limit": 10}
+        r = engine.execute(self.ro, query.select_sql(drv, spec, {"o": types}))
+        self.assertEqual(r["cols"], ["name", "n", "s"])
+        self.assertEqual((r["rows"][0][0], int(r["rows"][0][1]), float(r["rows"][0][2])), ("ann", 2, 12.5))
+
     def test_ping(self):
         self.assertTrue(engine.ping(self.ro)["version"])
 
@@ -260,6 +285,15 @@ class ServerTest(unittest.TestCase):
         hist = self.call(f"/api/history?conn={self.cid}")[1]
         self.assertEqual(hist[0]["connName"], "srv")
         self.assertIn("error", hist[0])
+
+    def test_build_and_values(self):
+        code, r = self.call("/api/build", {"conn": self.cid, "table": "t", "filters": {"conds": [{"col": "v", "op": "in", "values": ["a", None]}]}})
+        self.assertEqual((code, r["where"]), (200, '("v" = \'a\' OR "v" IS NULL)'))
+        code, r = self.call("/api/build", {"conn": self.cid, "query": {"from": {"table": "t"}, "columns": [{"col": "id", "agg": "max"}]}})
+        self.assertEqual(r["sql"], 'SELECT MAX("id")\nFROM "t"')
+        code, r = self.call("/api/values", {"conn": self.cid, "table": "t", "column": "v", "search": "A"})
+        self.assertEqual((code, r["values"], r["truncated"]), (200, [["a", 1]], False))
+        self.assertEqual(self.call("/api/build", {"conn": self.cid, "query": {"from": {}}})[0], 400)
 
     def test_export(self):
         req = urllib.request.Request(self.url + "/api/export", headers={"X-Rowbase": "1"},

@@ -46,11 +46,18 @@ struct ResultArea: View {
                                editTab: tab.isQuery ? nil : tab, pendingVersion: tab.pendingVersion, canEdit: tab.canEdit,
                                refLinks: state.refReady.contains(state.refKey(tab.connection)),
                                onFollowFK: { col, val, hint in state.followFK(from: tab, column: col, value: val, hint: hint) },
-                               onInspect: { state.inspect(tab, row: $0) })
+                               onInspect: { state.inspect(tab, row: $0) },
+                               filtered: tab.tableName == nil ? nil : Set((tab.filters.conds ?? []).compactMap(\.col)),
+                               onFilterEdit: { col, preset, view, rect in
+                                   let cur = tab.filter(on: col)
+                                   FilterPopoverPresenter.show(.table(state, tab, column: col), initial: preset ?? cur, showClear: cur != nil,
+                                                               relativeTo: rect, of: view) { state.setFilter(tab, column: col, $0) }
+                               },
+                               onFilterSet: { col, c in state.setFilter(tab, column: col, c) })
                     }
                 }
             } else if !tab.running {
-                Text(tab.isQuery ? "Write a query and press ⌘↩" : "").foregroundStyle(.tertiary)
+                Text(tab.isBuilder ? "Press Run to see the result" : tab.isQuery ? "Write a query and press ⌘↩" : "").foregroundStyle(.tertiary)
             }
             if tab.running {
                 ProgressView().controlSize(.small).padding(10)
@@ -261,8 +268,46 @@ final class GridCell: NSTableCellView {
 /// stored object properties (double release → heap corruption, crashed macOS 15). Data lives in `representedObject`.
 final class GridHeaderInfo: NSObject {
     let name: String, typeText: String, numeric: Bool, dim: Bool
-    init(name: String, typeText: String, numeric: Bool, dim: Bool) {
-        (self.name, self.typeText, self.numeric, self.dim) = (name, typeText, numeric, dim)
+    /// Column filter button at the right edge (table tabs); `filtered` = a filter is active (accent, filled).
+    let filterable: Bool, filtered: Bool
+    init(name: String, typeText: String, numeric: Bool, dim: Bool, filterable: Bool = false, filtered: Bool = false) {
+        (self.name, self.typeText, self.numeric, self.dim, self.filterable, self.filtered) = (name, typeText, numeric, dim, filterable, filtered)
+    }
+    static let filterWidth: CGFloat = 22
+
+    /// Funnel glyph (same shape as the web UI's), 12×12 centred in `r` of a flipped view: outline when idle, accent fill when active.
+    static func drawFunnel(in r: NSRect, active: Bool) {
+        let s: CGFloat = 12 / 16, ox = r.midX - 6, oy = r.midY - 6
+        func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: ox + x * s, y: oy + y * s) }
+        let path = NSBezierPath()
+        path.move(to: p(1.5, 2)); path.line(to: p(14.5, 2)); path.line(to: p(9.5, 8.2)); path.line(to: p(9.5, 13))
+        path.line(to: p(6.5, 14.5)); path.line(to: p(6.5, 8.2)); path.close()
+        path.lineJoinStyle = .round
+        if active {
+            NSColor.controlAccentColor.setFill(); path.fill()
+        } else {
+            path.lineWidth = 1.2
+            NSColor.secondaryLabelColor.setStroke(); path.stroke()
+        }
+    }
+}
+
+/// Header view that routes clicks on a column's filter button (right edge) instead of sorting.
+final class GridHeaderView: NSTableHeaderView {
+    var onFilter: ((Int, NSRect) -> Void)?
+
+    func filterRect(_ c: Int) -> NSRect? {
+        guard let tv = tableView, c >= 0, c < tv.tableColumns.count,
+              (tv.tableColumns[c].headerCell.representedObject as? GridHeaderInfo)?.filterable == true else { return nil }
+        let r = headerRect(ofColumn: c)
+        return NSRect(x: r.maxX - GridHeaderInfo.filterWidth - 4, y: r.minY, width: GridHeaderInfo.filterWidth + 4, height: r.height)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        let c = column(at: p)
+        if let r = filterRect(c), r.contains(p) { onFilter?(c, r); return }
+        super.mouseDown(with: event)
     }
 }
 
@@ -284,12 +329,16 @@ final class GridHeaderCell: NSTableHeaderCell {
             .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor, .paragraphStyle: ps])
         let t = NSAttributedString(string: typeText, attributes: [.font: NSFont.systemFont(ofSize: 10),
             .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: ps])
-        let x = f.minX + 6, w = max(0, f.width - 12 - (numeric ? 0 : 10))
+        let fw = i.filterable ? GridHeaderInfo.filterWidth : 0
+        let x = f.minX + 6, w = max(0, f.width - 12 - fw - (numeric || fw > 0 ? 0 : 10))
         let nh: CGFloat = 14, th: CGFloat = typeText.isEmpty ? 0 : 13
         var y = f.minY + (f.height - nh - th) / 2
         n.draw(in: NSRect(x: x, y: y, width: w, height: nh))
         y += nh
         if th > 0 { t.draw(in: NSRect(x: x, y: y, width: w, height: th)) }
+        if i.filterable {
+            GridHeaderInfo.drawFunnel(in: NSRect(x: f.maxX - fw - 2, y: f.minY, width: fw, height: f.height), active: i.filtered)
+        }
     }
 }
 
@@ -329,6 +378,10 @@ struct ResultGrid: NSViewRepresentable {
     var refLinks = false
     var onFollowFK: ((String, String, String?) -> Void)?
     var onInspect: (Int) -> Void
+    /// Column filters (table tabs): columns with an active filter, open the editor (column, preset, anchor), set one directly.
+    var filtered: Set<String>? = nil
+    var onFilterEdit: ((String, FilterCond?, NSView, NSRect) -> Void)?
+    var onFilterSet: ((String, FilterCond?) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -339,7 +392,9 @@ struct ResultGrid: NSViewRepresentable {
         tv.backgroundColor = .textBackgroundColor
         tv.gridStyleMask = [.solidVerticalGridLineMask]
         tv.gridColor = NSColor(white: 0.5, alpha: 0.16)
-        tv.headerView?.frame.size.height = 34
+        let hv = GridHeaderView(frame: NSRect(x: 0, y: 0, width: 100, height: 34))
+        hv.onFilter = { [weak c] col, rect in c?.headerFilter(col, rect) }
+        tv.headerView = hv
         tv.allowsMultipleSelection = true
         tv.allowsColumnResizing = true
         tv.allowsColumnReordering = true
@@ -403,6 +458,9 @@ struct ResultGrid: NSViewRepresentable {
         c.onInspect = onInspect
         c.rowOffset = rowOffset
         c.tab = editTab
+        c.onFilterEdit = onFilterEdit
+        c.onFilterSet = onFilterSet
+        c.setFiltered(filtered)
         c.update(result: result, version: version, info: info, transpose: transpose, hidden: hidden, explain: explainMySQL,
                  pending: pendingVersion, refLinks: refLinks)
     }
@@ -413,6 +471,9 @@ struct ResultGrid: NSViewRepresentable {
         weak var tab: WorkTab?
         var onFollowFK: ((String, String, String?) -> Void)?
         var onInspect: ((Int) -> Void)?
+        var onFilterEdit: ((String, FilterCond?, NSView, NSRect) -> Void)?
+        var onFilterSet: ((String, FilterCond?) -> Void)?
+        private var filtered: Set<String>?   // nil: filters unavailable (query tabs)
         var rowOffset = 0
         private var columns: [String] = []
         private var types: [String] = []
@@ -492,8 +553,29 @@ struct ResultGrid: NSViewRepresentable {
             else if grew { tv.scrollRowToVisible(0) }
         }
 
-        private func header(_ name: String, type: String, numeric: Bool, dim: Bool = false) -> GridHeaderCell {
-            GridHeaderCell(GridHeaderInfo(name: name, typeText: type, numeric: numeric, dim: dim))
+        private func header(_ name: String, type: String, numeric: Bool, dim: Bool = false, filter: Bool = false) -> GridHeaderCell {
+            GridHeaderCell(GridHeaderInfo(name: name, typeText: type, numeric: numeric, dim: dim, filterable: filter && filtered != nil,
+                                          filtered: filter && filtered?.contains(name) == true))
+        }
+
+        /// Filter state changed: refresh the header buttons in place (keeps widths, order and sort).
+        func setFiltered(_ f: Set<String>?) {
+            guard f != filtered else { return }
+            filtered = f
+            guard let tv = table, !transpose else { return }
+            for c in tv.tableColumns {
+                guard let old = c.headerCell.representedObject as? GridHeaderInfo, c.identifier.rawValue.hasPrefix("c") else { continue }
+                c.headerCell.representedObject = GridHeaderInfo(name: old.name, typeText: old.typeText, numeric: old.numeric, dim: old.dim,
+                                                                filterable: f != nil, filtered: f?.contains(old.name) == true)
+            }
+            tv.headerView?.needsDisplay = true
+        }
+
+        func headerFilter(_ c: Int, _ rect: NSRect) {
+            guard let tv = table, let hv = tv.headerView, !transpose, c < tv.tableColumns.count else { return }
+            let id = tv.tableColumns[c].identifier.rawValue
+            guard id.hasPrefix("c"), let ci = Int(id.dropFirst()), ci < columns.count else { return }
+            onFilterEdit?(columns[ci], nil, hv, rect)
         }
 
         private func textWidth(_ s: String, _ f: NSFont) -> CGFloat { (s as NSString).size(withAttributes: [.font: f]).width }
@@ -514,13 +596,14 @@ struct ResultGrid: NSViewRepresentable {
                 let name = columns[i]
                 let c = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("c\(i)"))
                 c.title = name
-                c.headerCell = header(name, type: types[i], numeric: numCols.contains(i))
+                c.headerCell = header(name, type: types[i], numeric: numCols.contains(i), filter: true)
                 c.minWidth = 50
                 c.sortDescriptorPrototype = NSSortDescriptor(key: "c\(i)", ascending: true)
                 c.headerToolTip = types[i].isEmpty ? name : "\(name): \(types[i])"
                 var w = max(textWidth(name, headerFont), textWidth(types[i], NSFont.systemFont(ofSize: 10))) + 28
+                    + (filtered != nil ? GridHeaderInfo.filterWidth : 0)
                 for r in rows.prefix(60) where i < r.count {
-                    if let v = r[i] { w = max(w, textWidth(String(v.prefix(80)), font) + 16) }
+                    if let v = r[i] { w = max(w, textWidth(String(v.prefix(80)), font) + 20) }
                 }
                 c.width = min(max(w, 60), 380)
                 tv.addTableColumn(c)
@@ -910,6 +993,10 @@ struct ResultGrid: NSViewRepresentable {
                 item.isEnabled = enabled
                 m.addItem(item)
             }
+            if let tab, tab.tableName != nil, filtered != nil, !transpose, let t = cellTarget(row: r, column: menuColumn), !t.insert {
+                addFilterItems(m, column: columns[t.col], value: cellValue(t.row, t.col), row: r, col: menuColumn)
+                m.addItem(.separator())
+            }
             if let tab, tab.canEdit, !transpose {
                 let t = cellTarget(row: r, column: menuColumn)
                 let name = t.map { columns[$0.col] }
@@ -931,6 +1018,37 @@ struct ResultGrid: NSViewRepresentable {
                 add("Copy Rows as TSV", #selector(copyTSV)); add("Copy Rows as JSON", #selector(copyJSON))
             }
             return m
+        }
+
+        /// Right-click → one-click filters by the cell's value (= ≠ > < is NULL); contains / more open the editor.
+        private func addFilterItems(_ m: NSMenu, column: String, value v: String?, row: Int, col: Int) {
+            m.addItem(.sectionHeader(title: "Filter \(column)"))
+            func item(_ title: String, _ fn: @escaping () -> Void) {
+                let a = MenuAction(fn)
+                let it = NSMenuItem(title: title, action: #selector(MenuAction.run), keyEquivalent: "")
+                it.target = a
+                it.representedObject = a
+                m.addItem(it)
+            }
+            let set = { [weak self] (c: FilterCond) in self?.onFilterSet?(column, c) }
+            let edit = { [weak self] (c: FilterCond?) in
+                guard let self, let tv = self.table else { return }
+                self.onFilterEdit?(column, c, tv, tv.frameOfCell(atColumn: col, row: row))
+            }
+            if let v {
+                let s = FilterOps.short(v)
+                item("= \(s)") { set(FilterCond(op: "eq", value: v)) }
+                item("≠ \(s)") { set(FilterCond(op: "ne", value: v)) }
+                item("contains \(s)…") { edit(FilterCond(op: "contains", value: v)) }
+                item("> \(s)") { set(FilterCond(op: "gt", value: v)) }
+                item("< \(s)") { set(FilterCond(op: "lt", value: v)) }
+                item("is NULL") { set(FilterCond(op: "null")) }
+            } else {
+                item("is NULL") { set(FilterCond(op: "null")) }
+                item("is not NULL") { set(FilterCond(op: "not_null")) }
+            }
+            item("More Filters…") { edit(nil) }
+            if filtered?.contains(column) == true { item("Clear Filter") { [weak self] in self?.onFilterSet?(column, nil) } }
         }
 
         private func revertible(_ t: (row: Int, col: Int, insert: Bool), _ tab: WorkTab) -> Bool {

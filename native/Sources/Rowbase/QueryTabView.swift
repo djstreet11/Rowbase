@@ -78,16 +78,18 @@ struct ResultPanel: View {
 struct VerticalSplit<T: View, B: View>: NSViewRepresentable {
     let top: T
     let bottom: B
+    var topHeight: CGFloat = 260
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Split: NSSplitView {
         var placed = false
+        var topHeight: CGFloat = 260
         override func layout() {
             super.layout()
             if !placed, bounds.height > 300 {
                 placed = true
-                setPosition(min(260, bounds.height * 0.45), ofDividerAt: 0)
+                setPosition(min(topHeight, bounds.height * (topHeight > 260 ? 0.6 : 0.45)), ofDividerAt: 0)
             }
         }
     }
@@ -95,6 +97,7 @@ struct VerticalSplit<T: View, B: View>: NSViewRepresentable {
     func makeNSView(context: Context) -> NSSplitView {
         let sv = Split()
         sv.isVertical = false
+        sv.topHeight = topHeight
         sv.dividerStyle = .thin
         sv.delegate = context.coordinator
         let t = NSHostingView(rootView: top), b = NSHostingView(rootView: bottom)
@@ -103,6 +106,12 @@ struct VerticalSplit<T: View, B: View>: NSViewRepresentable {
         sv.addArrangedSubview(t)
         sv.addArrangedSubview(b)
         return sv
+    }
+
+    /// Fill the offered space: without this SwiftUI asks for `fittingSize`, which runs Auto Layout over the whole split
+    /// subtree (both hosted panes + grid) on every update — most of the builder's per-keystroke cost.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSplitView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 600, height: proposal.height ?? 400)
     }
 
     func updateNSView(_ sv: NSSplitView, context: Context) {

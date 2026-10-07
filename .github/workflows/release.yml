@@ -20,6 +20,12 @@ jobs:
       - name: Linux (Docker, glibc 2.31 → Ubuntu 20.04+)
         if: matrix.linux
         run: bash packaging/build-linux.sh ${{ matrix.linux }}
+      - name: .deb (double-click install on Ubuntu/Debian, app-menu entry)
+        if: matrix.linux
+        run: |
+          sudo chown -R "$USER" dist   # created by the Docker build as root
+          bash packaging/make-deb.sh dist/rowbase-linux-${{ matrix.linux }} ${{ matrix.linux }}
+          dpkg-deb -I dist/rowbase_*.deb
       - uses: actions/setup-python@v6
         if: ${{ !matrix.linux }}
         with: {python-version: "3.12"}
@@ -31,7 +37,11 @@ jobs:
           python packaging/build.py
           ./dist/rowbase-* doctor
       - uses: actions/upload-artifact@v4
-        with: {name: "onefile-${{ matrix.os }}", path: "dist/rowbase-*"}
+        with:
+          name: "onefile-${{ matrix.os }}"
+          path: |
+            dist/rowbase-*
+            dist/rowbase_*.deb
   dmg:
     runs-on: macos-15
     steps:

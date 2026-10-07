@@ -25,6 +25,9 @@ MySQL / MariaDB · PostgreSQL · SQLite · native macOS app · one-file app for 
   and a built-in guide so the assistant knows how to use it. One copy-paste prompt sets everything up.
 - **One file, no installer.** Download a single binary for macOS, Linux or Windows and run it — no admin rights, no Python,
   no drivers to install. Or use the native macOS app.
+- **No SQL required.** Filter any column from its header like in DataGrip — pick values from a list with counts, or use
+  contains / starts with / between / LIKE / regex / NULL — and build whole queries visually (joins, counts and sums,
+  conditions, sorting) in the query builder, with the generated SQL shown live.
 - **Nice to use.** Foreign-key navigation (also for UUID references without FKs, e.g. 1C-style schemas), "referenced by", transpose, column picker, schema-aware autocomplete,
   EXPLAIN highlighting, query cancel, inline editing with SQL preview, export to CSV/JSON/Markdown/SQL, SSH tunnels.
 - **Open source** under Apache-2.0. Passwords live in your OS keychain, never in config files.
@@ -41,10 +44,14 @@ Grab the latest from **[Releases](https://github.com/djstreet11/Rowbase/releases
 |---|---|---|
 | macOS (native app) | `Rowbase-x.y.z.dmg` | open, drag to Applications |
 | macOS (one file) | `rowbase-macos-arm64` | `chmod +x rowbase-macos-arm64 && ./rowbase-macos-arm64` |
-| Linux x64 / arm64 | `rowbase-linux-x64` / `-arm64` | `chmod +x rowbase-linux-* && ./rowbase-linux-x64` (Ubuntu 20.04+, Debian 10+, RHEL 8+) |
+| Ubuntu / Debian | `rowbase_x.y.z_amd64.deb` / `_arm64.deb` | double-click → *Install* (or `sudo apt install ./rowbase_*.deb`), then start **Rowbase** from the apps menu |
+| Linux, no root | one command | `curl -fsSL https://raw.githubusercontent.com/djstreet11/Rowbase/main/packaging/install.sh \| sh` — installs to `~/.local/bin` + apps menu |
+| Linux x64 / arm64 (one file) | `rowbase-linux-x64` / `-arm64` | `chmod +x rowbase-linux-* && ./rowbase-linux-x64` (Ubuntu 20.04+, Debian 10+, RHEL 8+) |
 | Windows 10 / 11 | `rowbase-windows-x64.exe` | double-click |
 
-Started without arguments, the one-file app opens the web UI in your browser. Builds are not code-signed yet:
+Started without arguments (or from the apps menu), Rowbase opens the web UI in your browser; starting it again just
+reopens the page. A downloaded Linux one-file binary has no "executable" flag, so a double-click does nothing — use the
+`.deb` or the install command above, or `chmod +x` it. Builds are not code-signed yet:
 macOS → *System Settings → Privacy & Security → Open Anyway*; Windows → *More info → Run anyway*.
 
 **Updates.** The Mac app: *Rowbase → Check for Updates…* (from 0.3.0). One-file binaries: `rowbase update`, or the

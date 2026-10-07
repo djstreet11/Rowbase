@@ -7,6 +7,7 @@ the web UI (opens in the browser when started without arguments) and the MCP ser
 |---|---|---|
 | macOS arm64 | `python packaging/build.py` on a Mac | macOS 14+ (Apple Silicon) |
 | Linux arm64 / x64 | `bash packaging/build-linux.sh arm64\|x64` (Docker; works on macOS) | glibc ≥ 2.28: Ubuntu 20.04+, Debian 10+, RHEL 8+ |
+| Ubuntu/Debian `.deb` | `bash packaging/make-deb.sh dist/rowbase-linux-x64 x64` (needs `dpkg-deb`) | `/usr/bin/rowbase` + apps-menu entry |
 | Windows x64 | `python packaging/build.py` on Windows, or the GitHub Actions release | Windows 10 and 11 |
 | all + DMG | push a tag `vX.Y.Z` → `.github/workflows/release.yml` | — |
 
@@ -23,3 +24,6 @@ cross-compile, so Windows binaries come from a Windows machine or CI; Linux bina
   remove these prompts (optional, paid).
 - First start unpacks once per version into the user cache dir (~5 s on macOS); later starts take ~0.1 s
   (`--onefile-tempdir-spec={CACHE_DIR}/rowbase/{VERSION}` — important for MCP clients that spawn the server per session).
+- Linux desktop integration: `packaging/rowbase.desktop` (Exec=`rowbase ui`) + `packaging/rowbase-256.png`, shipped by the
+  `.deb` and by `packaging/install.sh` (no-root install to `~/.local`). A second launch reuses the running UI (same port).
+  `.deb` installs can't self-update (`/usr/bin` is root-owned) — `rowbase update` points to the new `.deb` instead.

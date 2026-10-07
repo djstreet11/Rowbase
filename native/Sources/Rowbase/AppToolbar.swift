@@ -35,9 +35,7 @@ struct AppToolbar: ToolbarContent {
                     .disabled(state.activeTab == nil)
                     .help("Run (⌘↩)")
             }
-            Button { state.openQuery() } label: { Image(systemName: "plus") }
-                .disabled(state.selectedConnection == nil)
-                .help("New Query (⌘T)")
+            NewTabMenu(state: state)
             Button { state.showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }
                 .help("History (⌘Y)")
             Button { state.showAIMCP = true } label: { Image(systemName: "sparkles") }
@@ -150,5 +148,28 @@ struct DatabaseMenu: View {
         Button { state.selectDatabase(db) } label: {
             if db == current { Label(db, systemImage: "checkmark") } else { Text(db) }
         }
+    }
+}
+
+/// "+" = new SQL tab on click; its menu also offers the visual query builder.
+struct NewTabMenu: View {
+    let state: AppState
+
+    var body: some View {
+        Menu {
+            Button { state.openQuery() } label: { Label("New SQL Query  ⌘T", systemImage: "terminal") }
+            Button { openBuilder() } label: { Label("New Query Builder  ⌥⌘T", systemImage: "hammer") }
+                .disabled(state.needsDatabase)
+        } label: {
+            Image(systemName: "plus")
+        } primaryAction: {
+            state.openQuery()
+        }
+        .disabled(state.selectedConnection == nil)
+        .help("New SQL Query (⌘T) — open the menu for the Query Builder (⌥⌘T)")
+    }
+
+    private func openBuilder() {
+        if let t = state.activeTab, !t.isQuery { state.openBuilder(from: t) } else { state.openBuilder() }
     }
 }

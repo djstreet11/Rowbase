@@ -14,6 +14,7 @@
   <button id="updBtn" class="upd" hidden></button>
   <button id="aiBtn" title="Connect AI assistants (MCP)">AI / MCP</button><button id="connBtn" title="Manage connections">Connections</button>
   <div class="spacer"></div>
+  <button id="newBuilder" title="Build a query visually — no SQL needed">+ Query builder</button>
   <button id="newConsole" title="New SQL console">+ SQL</button>
   <button id="historyBtn" title="History of executed queries">History</button>
   <button id="refreshBtn" class="ghost" title="Reset schema cache">⟳</button>
@@ -117,7 +118,7 @@
     <div class="crumbs"></div>
     <div class="bar">
       <div class="seg view"><button data-v="data" class="on">Data</button><button data-v="structure">Structure</button></div>
-      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="Ctrl+Space for suggestions"></div>
+      <div class="field grow"><span class="lbl">WHERE</span><input class="where mono" spellcheck="false" placeholder="raw SQL condition (Ctrl+Space for suggestions) — or use the ⏷ filter in a column header"></div>
       <div class="field order-f"><span class="lbl">ORDER BY</span><input class="order mono" spellcheck="false"></div>
       <select class="limit"><option>50</option><option selected>100</option><option>500</option><option>1000</option></select>
       <button class="primary run" title="Run (Enter)">▶</button>
@@ -130,10 +131,12 @@
       <span class="spacer"></span>
       <span class="pendbar" hidden><b class="pendn"></b><button class="preview" title="Show the SQL that Save will run">Preview SQL</button><button class="discard">Discard</button><button class="primary save" title="Apply all changes in one transaction (⌘S)">Save</button></span>
       <button class="addrow" title="Add a row (double-click cells to fill it in)">+ Row</button>
+      <button class="toqb" title="Continue in the visual query builder (joins, aggregates, conditions)">Query builder</button>
       <button class="tosql" title="Open this query in the SQL console">To console</button>
       <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
+    <div class="fchips" hidden></div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
     <div class="gridwrap structure" hidden></div>
@@ -155,8 +158,35 @@
       <button class="export" title="Export the whole result to a file">Export</button>
       <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
     </div>
+    <div class="fchips" hidden></div>
     <div class="sqlline mono"></div>
     <div class="gridwrap result"></div>
+  </div>
+</template>
+
+<template id="tplBuilder">
+  <div class="pane">
+    <div class="crumbs"></div>
+    <div class="qb">
+      <section><h4>Tables</h4><div class="qb-from"></div><button class="ghost add" data-add="join">+ Join another table</button></section>
+      <section><h4>Columns <label class="chk"><input type="checkbox" class="qb-distinct"> distinct rows</label></h4><div class="qb-cols"></div><button class="ghost add" data-add="col">+ Column</button><button class="ghost add" data-add="agg">+ Count / sum / average…</button></section>
+      <section><h4>Conditions <span class="qb-match">rows must match <select class="qb-m"><option value="all">all conditions</option><option value="any">any condition</option></select></span></h4><div class="qb-where"></div><button class="ghost add" data-add="cond">+ Condition</button></section>
+      <section><h4>Sort &amp; limit</h4><div class="qb-order"></div><button class="ghost add" data-add="order">+ Sort by</button><label class="qb-lim">show at most <input type="number" class="qb-limit" min="1" max="100000"> rows</label></section>
+      <div class="qb-sql"><pre class="hl mono"></pre><div class="qb-err"></div></div>
+    </div>
+    <div class="bar">
+      <button class="primary run" title="⌘/Ctrl+Enter">▶ Run</button>
+      <button class="qb-tosql" title="Open the generated SQL in a console to keep editing it by hand">Edit as SQL</button>
+      <button class="qb-copy">Copy SQL</button>
+      <select class="limit" hidden><option>100</option></select>
+      <span class="spacer"></span>
+      <div class="seg mode"><button data-m="grid" class="on">Table</button><button data-m="transpose">Transpose</button></div>
+      <button class="cols" title="Which columns to show"></button>
+      <button class="export" title="Export the whole result to a file">Export</button>
+      <button class="json" title="Copy as JSON">JSON</button><button class="tsv" title="Copy as TSV (for spreadsheets)">TSV</button>
+    </div>
+    <div class="sqlline mono" hidden></div>
+    <div class="gridwrap result"><div class="empty">Pick a table, columns and conditions above, then press ▶ Run</div></div>
   </div>
 </template>
 

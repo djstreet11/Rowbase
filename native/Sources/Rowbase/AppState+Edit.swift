@@ -99,6 +99,7 @@ extension AppState {
     }
 
     func runExport(_ tab: WorkTab, _ fmt: ExportFormat, table: String?) async {
+        if tab.tableName != nil && !filtersOK(tab) { return }
         let sql = tab.tableName != nil ? tab.exportSQL() : tab.lastSQL
         guard !sql.isEmpty, !tab.exporting else { return }
         let panel = NSSavePanel()

@@ -1,7 +1,7 @@
 # Rowbase — Product & Technical Spec
 
 > Living document. Updated by the agent via the `learn` skill whenever new facts/decisions appear.
-> Last update: 2026-10-04 (Apache-2.0, MCP server, one-file builds, pg8000).
+> Last update: 2026-10-07 (column filters + visual query builder in both tracks, Linux .deb).
 
 ## 1. Origin & idea
 
@@ -57,7 +57,8 @@ pyproject.toml  deps (all pure Python): PyMySQL, pg8000, keyring · packaging/ o
 ### 2.4 HTTP API (header `X-Rowbase: 1`, Host must be localhost)
 GET `/api/conns`, `/api/tables?conn`, `/api/table?conn&name` → `{name, quoted, driver, columns[{…, fk}], indexes, referencedBy}`,
 `/api/history?limit&conn`, `/api/version[?force=1]` → `{current, latest, available, kind, how, notes_url, canSelfUpdate}`.
-POST `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`, `/api/update` (one-file
+POST `/api/build` (`{conn, table, filters}` → `{where}` · `{conn, query}` → `{sql}`), `/api/values` (`{conn, table, column,
+where, search, limit}` → `{values[[v, count]], truncated}`), `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`, `/api/update` (one-file
 binary: swap + re-exec on the same port).
 History: `~/.config/rowbase/history.jsonl` (last 2000 entries).
 
@@ -68,6 +69,9 @@ autocomplete, paging, COUNT, grid/transpose, column picker, row inspector with "
 implicit UUID references (1C-style schemas, §5) with
 breadcrumbs, SQL console (highlighting, ⌘/Ctrl+Enter statement under caret, dialect EXPLAIN buttons, schema-aware
 autocomplete), confirmation for writes on RW connections, history drawer, copy JSON/TSV. English UI, no deps.
+**Column filters** (funnel in headers: value list with counts or any operator; chips with all/any; right-click a cell;
+console results wrapped as `SELECT * FROM (<sql>) AS rb_f WHERE …`) and the **visual query builder** tab (tables + FK-suggested
+joins, columns/aggregates with implicit GROUP BY, conditions, sort, limit, live SQL, "Edit as SQL").
 
 ### 2.6 Known gaps
 - No query cancel; no SSH tunnel; no TLS options for MySQL; no editing grid (only SQL on RW connections).
@@ -113,7 +117,8 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
     Sources/RowbaseCore   Models (Connection, Dialect, QueryResult, TableInfo), Store (+Keychain, URL parsing), Guard (port),
                           Driver (DBSession protocol + Catalog SQL), SQLite/Postgres/MySQL sessions, Engine actor (+History)
     Sources/Rowbase       App, AppState, WorkTab, Sidebar, TabBar, TableTab, Structure, QueryTab, ResultGrid, SQLEditor,
-                          RowInspector, ConnectionsSheet, HistorySheet
+                          RowInspector, ConnectionsSheet, HistorySheet, FilterViews (filter popover + chips),
+                          BuilderModel / BuilderTabView (visual query builder)
     Tests/RowbaseCoreTests  guard conformance (shared JSON), store/URL, engine on real SQLite/PG/MariaDB
   ```
 - **Features (MVP)**: shared connection store + Keychain, connection manager sheet (URL paste, test, RO toggle, env/color/group),
@@ -127,6 +132,12 @@ See §2. Principles: stdlib-first, zero frontend deps, minimal Python deps. New 
 - **Debug**: `ROWBASE_SNAPSHOT=…png` renders the window to PNG and exits (see `native-app` skill).
 - **Parity with web UI**: reached 2026-10-04 (transpose, column picker, WHERE/ORDER BY autocomplete, EXPLAIN ANALYZE, tab restore,
   tables/views filter, history errors filter, MySQL EXPLAIN highlight). Editing + export in both tracks.
+  Since 2026-10-07: column filters (header funnel button → popover with every operator and a searchable value list with counts
+  from `QueryBuilder.valuesSQL`, other filters applied; fallback = loaded rows; chips with all/any; right-click cell → = ≠ contains
+  > < is NULL; effective WHERE = `(raw WHERE) AND (filters)` for data, COUNT, export, "Open in SQL Editor"; persisted with the tab)
+  and a "Query Builder" tab (from + FK-suggested joins with plain-language types, columns with count/sum/avg/min/max and implicit
+  GROUP BY, conditions with the same operators/value picker, sort incl. aggregates, limit, live highlighted SQL, Run → normal grid,
+  Edit as SQL; opened from the toolbar, ⌥⌘T, or a table tab's "…" menu carrying its column filters).
 - **Gaps (both)**: no structure (DDL) editing, empty result sets show no column names (MySQL/PG), Postgres values decoded from binary
   (unknown types → text/hex fallback), SSH password auth (key/agent only), web UI has no query cancel, not notarized.
 - **Distribution**: `native/scripts/release.sh` → DMG (app + Applications link + volume icon), generated app icon, version in
@@ -163,6 +174,12 @@ Deferred; keep contracts (§5) portable.
   → scan all, 40 tables per UNION ALL query. Label = first non-empty of Description/Name/Title/Label/Number/Code.
   Heuristics pinned by `tests/ref_vectors.json`. Web: `GET /api/reftables?conn` → `{count}`, `POST /api/resolve
   {conn, value, table, column, hint}` → `{matches[{table, pk, label}], how}`. MCP tool `find_ref`.
+- Filters & visual queries (`rowbase/query.py`, `QueryBuilder.swift`): condition `{col, src?, op, value, value2, values}`,
+  group `{match: all|any, conds}` (nestable), spec `{from, joins[{type, table, as, on[{left, right}]}], columns[{src, col, agg, as}],
+  distinct, where, orderBy, limit}`. Ops: eq ne gt ge lt le between in not_in contains not_contains starts ends like not_like
+  regex null not_null empty not_empty. Negative ops keep NULL rows; contains/starts/ends are case-insensitive (PG ILIKE,
+  non-text cast to TEXT) with `ESCAPE '!'`; numbers unquoted only for numeric types; MySQL BINARY(16) UUID → `UNHEX()`.
+  Incomplete conditions are skipped. SQL pinned by `tests/query_vectors.json`.
 - Database switch: web connection key `<id>::<db>`; native per-connection override in UI state. Not stored in connections.json.
 
 ## 6. Roadmap

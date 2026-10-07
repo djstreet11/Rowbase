@@ -21,6 +21,8 @@ struct SavedTab: Codable {
     var limit: Int
     var sql: String
     var transpose: Bool
+    var filters: FilterGroup?
+    var builder: QBModel?
 }
 
 struct SavedTabs: Codable {
@@ -130,8 +132,10 @@ final class AppState {
 
     private func currentSaved() -> SavedTabs {
         SavedTabs(tabs: tabs.map {
-            SavedTab(kind: $0.isQuery ? "query" : "table", table: $0.tableName, conn: $0.connection.id, database: $0.connection.database,
-                     whereText: $0.whereText, orderText: $0.orderText, limit: $0.limit, sql: $0.sql, transpose: $0.transpose)
+            SavedTab(kind: $0.isBuilder ? "builder" : $0.isQuery ? "query" : "table", table: $0.tableName, conn: $0.connection.id,
+                     database: $0.connection.database, whereText: $0.whereText, orderText: $0.orderText, limit: $0.limit, sql: $0.sql,
+                     transpose: $0.transpose, filters: $0.filters.conds?.isEmpty == false ? $0.filters : nil,
+                     builder: $0.isBuilder ? $0.builder : nil)
         }, active: tabs.firstIndex { $0.id == activeTabID })
     }
 
@@ -172,7 +176,11 @@ final class AppState {
             if s.kind == "table", let name = s.table {
                 t = WorkTab(kind: .table(name), connection: c)
                 t.needsLoad = true
+            } else if s.kind == "builder" {
+                t = WorkTab(kind: .builder, connection: c)
+                t.builder = s.builder ?? QBModel()
             } else { t = WorkTab(kind: .query, connection: c) }
+            if let f = s.filters { t.filters = f }
             t.whereText = s.whereText
             t.orderText = s.orderText
             t.limit = s.limit
@@ -295,6 +303,23 @@ final class AppState {
         return t
     }
 
+    /// Visual query builder tab; `from` carries a table tab's table and column filters over.
+    @discardableResult
+    func openBuilder(from tab: WorkTab? = nil, connection: Connection? = nil) -> WorkTab? {
+        guard let conn = tab?.connection ?? connection ?? selectedConnection else { return nil }
+        let t = WorkTab(kind: .builder, connection: conn)
+        if let src = tab, let table = src.tableName {
+            t.builder.from.table = table
+            t.builder.match = src.filters.match ?? "all"
+            t.builder.conds = (src.filters.conds ?? []).filter { $0.conds == nil }.map { QBCond(ref: QBRef(src: "s0", col: $0.col ?? ""), cond: $0) }
+            t.builder.limit = src.limit
+            if !WorkTab.strip(src.whereText, "WHERE").isEmpty { t.note = "The raw WHERE text is not carried over — only column filters" }
+        }
+        tabs.append(t)
+        activeTabID = t.id
+        return t
+    }
+
     func closeTab(_ id: UUID) {
         guard let i = tabs.firstIndex(where: { $0.id == id }) else { return }
         tabs.remove(at: i)
@@ -397,7 +422,7 @@ final class AppState {
         if refCache[refKey(tab.connection)] == nil { Task { await refTables(for: tab.connection) } }
         switch tab.kind {
         case .table: await loadTable(tab)
-        case .query: run(tab)
+        case .query, .builder: run(tab)
         }
     }
 
@@ -408,6 +433,7 @@ final class AppState {
 
     func run(_ tab: WorkTab, explain: Bool = false, analyze: Bool = false) {
         if !tab.isQuery { Task { await loadTable(tab) }; return }
+        if tab.isBuilder { Task { await runBuilder(tab) }; return }
         var sql = SQLSplit.statement(in: tab.sql, selection: tab.selection, dialect: tab.connection.dialect)
         guard !sql.isEmpty else { return }
         if explain || analyze {
@@ -450,7 +476,41 @@ final class AppState {
                                   rows: result?.rows.count, elapsed: result?.elapsed, error: error, affected: result?.affected))
     }
 
-    func execute(_ tab: WorkTab, sql: String, isExplain: Bool) async {
+    /// SELECT of the builder tab (column types from the cached table infos pick the literal styles).
+    func builderSQL(_ tab: WorkTab) async throws -> String {
+        var infos: [String: TableInfo] = [:]
+        for s in tab.builder.sources where infos[s.table] == nil { infos[s.table] = try? await tableInfo(for: tab.connection, table: s.table) }
+        return try QueryBuilder.selectSQL(tab.connection.dialect, tab.builder.spec, types: tab.builder.types(infos))
+    }
+
+    /// FK-suggested ON pair for a newly joined table: either side may hold the foreign key; else an empty pair to fill in.
+    func suggestJoinPairs(_ conn: Connection, model q: QBModel, join id: String, table: String) async -> [QBPair] {
+        let jm = try? await tableInfo(for: conn, table: table)
+        for s in q.sources where s.id != id {
+            let sm = try? await tableInfo(for: conn, table: s.table)
+            if let a = sm?.columns.first(where: { $0.fk?.table == table }), let fk = a.fk {
+                return [QBPair(left: QBRef(src: id, col: fk.column), right: QBRef(src: s.id, col: a.name))]
+            }
+            if let b = jm?.columns.first(where: { $0.fk?.table == s.table }), let fk = b.fk {
+                return [QBPair(left: QBRef(src: id, col: b.name), right: QBRef(src: s.id, col: fk.column))]
+            }
+        }
+        return [QBPair(left: QBRef(src: id, col: ""), right: QBRef(src: q.from.id, col: ""))]
+    }
+
+    func runBuilder(_ tab: WorkTab) async {
+        do {
+            let sql = try await builderSQL(tab)
+            tab.sql = sql
+            tab.limit = min(tab.builder.limit ?? 5000, 5000)
+            await execute(tab, sql: sql, isExplain: false, source: "builder")
+        } catch {
+            tab.result = nil
+            tab.error = error.localizedDescription
+        }
+    }
+
+    func execute(_ tab: WorkTab, sql: String, isExplain: Bool, source: String = "console") async {
         tab.token += 1
         let tok = tab.token
         tab.running = true
@@ -467,13 +527,13 @@ final class AppState {
             tab.lastSQL = sql
             tab.exportable = !isExplain && !r.columns.isEmpty && r.affected == nil
                 && !Self.mayWrite(sql, first: SQLGuard.analyze(sql, conn.dialect).first, dialect: conn.dialect)
-            record(tab, sql: sql, source: "console", result: r, error: nil)
+            record(tab, sql: sql, source: source, result: r, error: nil)
             if r.affected != nil { clearInfo(for: conn); if conn.id == selectedConnectionID { await loadTables() } }
         } catch {
             guard tab.token == tok else { return }
             tab.result = nil
             tab.error = error.localizedDescription
-            record(tab, sql: sql, source: "console", result: nil, error: error.localizedDescription)
+            record(tab, sql: sql, source: source, result: nil, error: error.localizedDescription)
         }
         if tab.token == tok { tab.running = false }
     }
@@ -495,6 +555,13 @@ final class AppState {
                 return
             }
         }
+        do { _ = try tab.effectiveWhere() } catch {  // e.g. regex filter on SQLite: never silently drop a filter
+            guard tab.token == tok else { return }
+            tab.result = nil
+            tab.error = error.localizedDescription
+            tab.running = false
+            return
+        }
         let sql = tab.buildSQL(extra: 1)
         do {
             let id = UUID(); tab.runID = id
@@ -515,7 +582,16 @@ final class AppState {
         if tab.token == tok { tab.running = false }
     }
 
+    /// A column filter that can't become SQL (e.g. regex restored onto SQLite) must block, never silently drop out.
+    func filtersOK(_ tab: WorkTab) -> Bool {
+        do { _ = try tab.effectiveWhere(); return true } catch {
+            alert = AppAlert(title: "Fix the column filters first", message: error.localizedDescription)
+            return false
+        }
+    }
+
     func count(_ tab: WorkTab) async {
+        guard filtersOK(tab) else { return }
         let sql = tab.countSQL()
         do {
             let r = try await engine.execute(tab.connection, sql, limit: 1)
@@ -527,6 +603,40 @@ final class AppState {
         }
     }
 
+    // MARK: column filters
+
+    /// Replace (or remove with nil) the filter on `column` and reload from the first page.
+    func setFilter(_ tab: WorkTab, column: String, _ cond: FilterCond?) {
+        guardPending(tab) { [self] in
+            var conds = tab.filters.conds ?? []
+            let i = conds.firstIndex { $0.col == column }
+            if var c = cond {
+                c.col = column
+                if let i { conds[i] = c } else { conds.append(c) }
+            } else if let i { conds.remove(at: i) }
+            tab.filters.conds = conds
+            applyFilters(tab)
+        }
+    }
+
+    func setFilters(_ tab: WorkTab, _ g: FilterGroup) {
+        guardPending(tab) { [self] in tab.filters = g; applyFilters(tab) }
+    }
+
+    private func applyFilters(_ tab: WorkTab) {
+        tab.offset = 0
+        Task { await loadTable(tab) }
+    }
+
+    /// Distinct values + counts of a column (filter popovers): server side with the other filters applied.
+    func columnValues(_ conn: Connection, table: String, column: String, where w: String, search: String, type: String,
+                      limit: Int = 300) async throws -> (values: [(String?, Int)], truncated: Bool) {
+        let sql = try QueryBuilder.valuesSQL(conn.dialect, table: table, column: column, where: w, search: search, type: type, limit: limit + 1)
+        let r = try await engine.execute(conn, sql, limit: limit + 1, timeout: 15)
+        let vals = r.rows.prefix(limit).map { row in (row.first ?? nil, Int(row.count > 1 ? row[1] ?? "0" : "0") ?? 0) }
+        return (Array(vals), r.rows.count > limit)
+    }
+
     func page(_ tab: WorkTab, by dir: Int) {
         guardPending(tab) { [self] in
             tab.offset = max(0, tab.offset + dir * tab.limit)
@@ -535,6 +645,75 @@ final class AppState {
     }
 
     // MARK: snapshot hook
+
+    static func find<T: NSView>(_ type: T.Type, in v: NSView?) -> T? {
+        guard let v else { return nil }
+        if let t = v as? T { return t }
+        for s in v.subviews { if let t = find(type, in: s) { return t } }
+        return nil
+    }
+
+    /// ROWBASE_SNAPSHOT_BUILDER=1: builder from the active table tab (carries its filters);
+    /// =demo: orders ⟕ customers (FK-suggested pair), city + count + sum, status ∈ (paid, shipped), sort by the sum — then run.
+    private func snapshotBuilder(_ mode: String) async {
+        if let t = activeTab, !t.isQuery {
+            var waited = 0
+            while t.result == nil && t.error == nil && waited < 40 { try? await Task.sleep(for: .milliseconds(250)); waited += 1 }
+        }
+        guard let b = openBuilder(from: activeTab?.isQuery == false ? activeTab : nil) else { return }
+        if mode == "bench", let t = tables.first?.name, let info = try? await tableInfo(for: b.connection, table: t) {
+            // wide table: 4 columns, 3 conditions, 1 sort, then N edits (typing into a condition) with a synchronous redraw each
+            let cols = info.columns.map(\.name)
+            var q = QBModel()
+            q.from.table = t
+            q.columns = cols.prefix(4).map { QBColumn(ref: QBRef(src: "s0", col: $0)) }
+            q.conds = cols.dropFirst(4).prefix(3).map { QBCond(ref: QBRef(src: "s0", col: $0), cond: FilterCond(op: "contains", value: "a")) }
+            q.order = [QBOrder(ref: QBRef(src: "s0", col: cols[0]))]
+            b.builder = q
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard let w = NSApp.windows.first(where: { $0.canBecomeMain }), let cv = w.contentView else { return }
+            let n = Int(env("ROWBASE_SNAPSHOT_BENCH_N") ?? "") ?? 20
+            let t0 = Date()
+            for i in 0..<n {
+                b.builder.conds[0].cond.value = String(repeating: "a", count: i + 2)
+                cv.layoutSubtreeIfNeeded()
+                w.displayIfNeeded()
+            }
+            print(String(format: "ROWBASE_BENCH edits=%d per_edit=%.1fms", n, Date().timeIntervalSince(t0) * 1000 / Double(n)))
+            fflush(stdout)
+            return
+        }
+        if mode == "demo" {
+            var q = QBModel()
+            q.from.table = "orders"
+            q.from.alias = q.nextAlias(for: "orders", excluding: q.from.id)
+            var j = QBSource(id: "s1", type: "left")
+            j.table = "customers"
+            j.alias = q.nextAlias(for: "customers", excluding: j.id)
+            q.joins = [j]
+            q.joins[0].on = await suggestJoinPairs(b.connection, model: q, join: j.id, table: "customers")
+            q.columns = [QBColumn(ref: QBRef(src: "s1", col: "city")), QBColumn(ref: QBRef(src: "s0", col: "*"), agg: "count", name: "orders"),
+                         QBColumn(ref: QBRef(src: "s0", col: "total"), agg: "sum", name: "revenue")]
+            q.conds = [QBCond(ref: QBRef(src: "s0", col: "status"), cond: FilterCond(op: "in", values: ["paid", "shipped"])),
+                       QBCond(ref: QBRef(src: "s1", col: "email"), cond: FilterCond(op: "not_null"))]
+            q.order = [QBOrder(ref: QBRef(src: "s0", col: "total"), agg: "sum", desc: true)]
+            q.limit = 10
+            b.builder = q
+        }
+        try? await Task.sleep(for: .milliseconds(600))
+        if env("ROWBASE_SNAPSHOT_RUN") == "1" || mode == "demo" { await runBuilder(b) }
+        // call the last rendered builder ✕ button action N times (the exact closure a click runs)
+        if let n = Int(env("ROWBASE_SNAPSHOT_PRESS_REMOVE") ?? "") {
+            for _ in 0..<n {
+                try? await Task.sleep(for: .milliseconds(500))
+                BuilderTabView.lastRemove?()
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            print("ROWBASE_BUILDER", b.builder.columns.count, b.builder.conds.count, b.builder.order.count)
+        }
+    }
+
+    private func env(_ k: String) -> String? { ProcessInfo.processInfo.environment[k] }
 
     func runSnapshotIfRequested() async {
         let env = ProcessInfo.processInfo.environment
@@ -553,7 +732,13 @@ final class AppState {
             selectDatabase(db)
             try? await Task.sleep(for: .milliseconds(800))
         }
-        if let t = env["ROWBASE_SNAPSHOT_TABLE"], !t.isEmpty { openTable(t) }
+        if let t = env["ROWBASE_SNAPSHOT_TABLE"], !t.isEmpty {
+            openTable(t)
+            // column filters before the first load (JSON FilterGroup)
+            if let j = env["ROWBASE_SNAPSHOT_FILTERS"], let tab = activeTab, let g = try? JSONDecoder().decode(FilterGroup.self, from: Data(j.utf8)) {
+                tab.filters = g
+            }
+        }
         if let sql = env["ROWBASE_SNAPSHOT_SQL"], !sql.isEmpty, let tab = openQuery(sql: sql) { run(tab) }
         var completeTab: WorkTab?
         if let text = env["ROWBASE_SNAPSHOT_COMPLETE"], !text.isEmpty, let tab = openQuery(sql: text) { completeTab = tab }
@@ -572,6 +757,7 @@ final class AppState {
                 tv.completer?.update(force: true)
             }
         }
+        if let mode = env["ROWBASE_SNAPSHOT_BUILDER"], !mode.isEmpty { await snapshotBuilder(mode) }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "connections" { showConnections = true }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "ai" { showAIMCP = true }
         if env["ROWBASE_SNAPSHOT_SHEET"] == "history" { showHistory = true }
@@ -579,6 +765,32 @@ final class AppState {
         if env["ROWBASE_SNAPSHOT_COLUMNS"] == "1", let t = activeTab {
             t.columnPickerOpen = true
             try? await Task.sleep(for: .milliseconds(800))
+        }
+        // "col:row:title prefix" — right-click menu of that cell, then the filter item whose title starts with the prefix
+        if let spec = env["ROWBASE_SNAPSHOT_CELLMENU"], let w = NSApp.windows.first(where: { $0.canBecomeMain }),
+           let tv = Self.find(GridTableView.self, in: w.contentView) {
+            let p = spec.split(separator: ":", maxSplits: 2).map(String.init)
+            if p.count == 3, let row = Int(p[1]),
+               let c = tv.tableColumns.firstIndex(where: { ($0.headerCell.representedObject as? GridHeaderInfo)?.name == p[0] }),
+               let m = tv.menuProvider?(NSPoint(x: tv.rect(ofColumn: c).midX, y: tv.rect(ofRow: row).midY)),
+               let item = m.items.first(where: { $0.title.hasPrefix(p[2]) }), let a = item.target as? MenuAction {
+                print("ROWBASE_MENU", m.items.map(\.title))
+                a.run()
+                try? await Task.sleep(for: .milliseconds(1500))
+            }
+        }
+        if let col = env["ROWBASE_SNAPSHOT_FILTER_POP"], let w = NSApp.windows.first(where: { $0.canBecomeMain }),
+           let hv = Self.find(GridHeaderView.self, in: w.contentView), let tv = hv.tableView,
+           let c = tv.tableColumns.firstIndex(where: { ($0.headerCell.representedObject as? GridHeaderInfo)?.name == col }), let r = hv.filterRect(c) {
+            hv.onFilter?(c, r)  // the real header-button path
+            try? await Task.sleep(for: .milliseconds(1500))
+        }
+        if let t = activeTab {  // what actually ran (verified against the DB by the snapshot caller)
+            print("ROWBASE_SQL", (t.isQuery ? t.lastSQL : t.buildSQL()).replacingOccurrences(of: "\n", with: " ⏎ "))
+            if !t.isQuery { print("ROWBASE_COUNT_SQL", t.countSQL()); print("ROWBASE_EXPORT_SQL", t.exportSQL()) }
+            if let r = t.result { print("ROWBASE_ROWS", r.rows.count, r.rows.prefix(5).map { $0.map { $0 ?? "NULL" }.joined(separator: "|") }) }
+            if let e = t.error { print("ROWBASE_ERROR", e) }
+            fflush(stdout)
         }
         if let text = env["ROWBASE_SNAPSHOT_WHERE_COMPLETE"], !text.isEmpty, let t = activeTab, let f = t.whereField, let c = t.whereCompleter {
             t.whereText = text
@@ -658,6 +870,11 @@ final class AppState {
         }
         if let pop = activeTab?.whereCompleter?.popup.window {
             render(pop, to: base0 + "-wherepopup.png")
+        }
+        if let v = FilterPopoverPresenter.current?.contentViewController?.view, v.window?.isVisible == true,
+           let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {  // content only: popover material isn't captured
+            v.cacheDisplay(in: v.bounds, to: rep)
+            if let png = rep.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: base0 + "-filterpop.png")) }
         }
         if let sheet = main?.attachedSheet ?? NSApp.windows.first(where: { $0.sheetParent != nil }) {
             let base = (path as NSString).deletingPathExtension
