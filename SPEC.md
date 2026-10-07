@@ -57,7 +57,8 @@ pyproject.toml  deps (all pure Python): PyMySQL, pg8000, keyring · packaging/ o
 ### 2.4 HTTP API (header `X-Rowbase: 1`, Host must be localhost)
 GET `/api/conns`, `/api/tables?conn`, `/api/table?conn&name` → `{name, quoted, driver, columns[{…, fk}], indexes, referencedBy}`,
 `/api/history?limit&conn`, `/api/version[?force=1]` → `{current, latest, available, kind, how, notes_url, canSelfUpdate}`.
-POST `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`, `/api/update` (one-file
+POST `/api/build` (`{conn, table, filters}` → `{where}` · `{conn, query}` → `{sql}`), `/api/values` (`{conn, table, column,
+where, search, limit}` → `{values[[v, count]], truncated}`), `/api/query`, `/api/conns/save`, `/api/conns/delete`, `/api/conns/test`, `/api/refresh`, `/api/update` (one-file
 binary: swap + re-exec on the same port).
 History: `~/.config/rowbase/history.jsonl` (last 2000 entries).
 
@@ -68,6 +69,9 @@ autocomplete, paging, COUNT, grid/transpose, column picker, row inspector with "
 implicit UUID references (1C-style schemas, §5) with
 breadcrumbs, SQL console (highlighting, ⌘/Ctrl+Enter statement under caret, dialect EXPLAIN buttons, schema-aware
 autocomplete), confirmation for writes on RW connections, history drawer, copy JSON/TSV. English UI, no deps.
+**Column filters** (funnel in headers: value list with counts or any operator; chips with all/any; right-click a cell;
+console results wrapped as `SELECT * FROM (<sql>) AS rb_f WHERE …`) and the **visual query builder** tab (tables + FK-suggested
+joins, columns/aggregates with implicit GROUP BY, conditions, sort, limit, live SQL, "Edit as SQL").
 
 ### 2.6 Known gaps
 - No query cancel; no SSH tunnel; no TLS options for MySQL; no editing grid (only SQL on RW connections).
@@ -163,6 +167,12 @@ Deferred; keep contracts (§5) portable.
   → scan all, 40 tables per UNION ALL query. Label = first non-empty of Description/Name/Title/Label/Number/Code.
   Heuristics pinned by `tests/ref_vectors.json`. Web: `GET /api/reftables?conn` → `{count}`, `POST /api/resolve
   {conn, value, table, column, hint}` → `{matches[{table, pk, label}], how}`. MCP tool `find_ref`.
+- Filters & visual queries (`rowbase/query.py`, `QueryBuilder.swift`): condition `{col, src?, op, value, value2, values}`,
+  group `{match: all|any, conds}` (nestable), spec `{from, joins[{type, table, as, on[{left, right}]}], columns[{src, col, agg, as}],
+  distinct, where, orderBy, limit}`. Ops: eq ne gt ge lt le between in not_in contains not_contains starts ends like not_like
+  regex null not_null empty not_empty. Negative ops keep NULL rows; contains/starts/ends are case-insensitive (PG ILIKE,
+  non-text cast to TEXT) with `ESCAPE '!'`; numbers unquoted only for numeric types; MySQL BINARY(16) UUID → `UNHEX()`.
+  Incomplete conditions are skipped. SQL pinned by `tests/query_vectors.json`.
 - Database switch: web connection key `<id>::<db>`; native per-connection override in UI state. Not stored in connections.json.
 
 ## 6. Roadmap
