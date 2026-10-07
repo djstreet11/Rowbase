@@ -680,6 +680,15 @@ final class AppState {
         }
         try? await Task.sleep(for: .milliseconds(600))
         if env("ROWBASE_SNAPSHOT_RUN") == "1" || mode == "demo" { await runBuilder(b) }
+        // call the last rendered builder ✕ button action N times (the exact closure a click runs)
+        if let n = Int(env("ROWBASE_SNAPSHOT_PRESS_REMOVE") ?? "") {
+            for _ in 0..<n {
+                try? await Task.sleep(for: .milliseconds(500))
+                BuilderTabView.lastRemove?()
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            print("ROWBASE_BUILDER", b.builder.columns.count, b.builder.conds.count, b.builder.order.count)
+        }
     }
 
     private func env(_ k: String) -> String? { ProcessInfo.processInfo.environment[k] }

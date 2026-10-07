@@ -166,8 +166,12 @@ struct BuilderTabView: View {
             .disabled(q.from.table.isEmpty)
     }
 
+    /// Actions must not read row Bindings: reading one inside `removeAll` on the same array is an exclusivity violation
+    /// (crashed the app) — callers capture the row id while rendering.
+    @MainActor static var lastRemove: (() -> Void)?   // snapshot hook ROWBASE_SNAPSHOT_PRESS_REMOVE
     fileprivate func removeButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+        if isSnapshot { Self.lastRemove = action }
+        return Button(action: action) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
             .buttonStyle(.plain).help("Remove")
     }
 
@@ -229,6 +233,7 @@ struct BuilderTabView: View {
 
     private func columnRow(_ c: Binding<QBColumn>) -> some View {
         let star = c.wrappedValue.agg == "count"
+        let id = c.wrappedValue.id
         return HStack(spacing: 8) {
             Picker("", selection: Binding(get: { c.wrappedValue.agg }, set: { a in
                 c.wrappedValue.agg = a
@@ -239,12 +244,13 @@ struct BuilderTabView: View {
             columnPicker(Binding(get: { Self.tag(c.wrappedValue.ref) }, set: { if let r = Self.ref($0) { c.wrappedValue.ref = r } }),
                          groups: groups(), extra: star ? [Option(tag: q.firstID + "\t*", label: "all rows (*)")] : [], extraTitle: "Rows")
             TextField("name in result (optional)", text: c.name).textFieldStyle(.roundedBorder).frame(width: 170, alignment: .leading)
-            removeButton { tab.builder.columns.removeAll { $0.id == c.wrappedValue.id } }
+            removeButton { tab.builder.columns.removeAll { $0.id == id } }
         }
     }
 
     private func orderRow(_ o: Binding<QBOrder>) -> some View {
         let aggCols = q.columns.enumerated().filter { !$0.element.agg.isEmpty && !$0.element.ref.col.isEmpty }
+        let id = o.wrappedValue.id
         let results = aggCols.map { Option(tag: "agg\t\($0.offset)", label: q.columnLabel($0.element)) }
         let cur: String = {
             let v = o.wrappedValue
@@ -264,7 +270,7 @@ struct BuilderTabView: View {
                 Text("Z → A, largest first").tag(true)
             }
             .labelsHidden().fixedSize()
-            removeButton { tab.builder.order.removeAll { $0.id == o.wrappedValue.id } }
+            removeButton { tab.builder.order.removeAll { $0.id == id } }
         }
     }
 
@@ -309,6 +315,7 @@ private struct JoinRow: View {
     var body: some View {
         let q = builder.model
         let rel = builder.related
+        let jid = join.id
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("join").foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
@@ -322,10 +329,11 @@ private struct JoinRow: View {
                 if !join.table.isEmpty { Text("as \(join.alias)").foregroundStyle(.secondary).font(.system(size: 12, design: .monospaced)) }
                 Picker("", selection: $join.type) { ForEach(QBModel.joinTypes, id: \.key) { Text($0.label).tag($0.key) } }
                     .labelsHidden().fixedSize().help("Which rows to keep")
-                builder.removeButton { builder.builderTab.builder = q.joinRemoved(join.id) }
+                builder.removeButton { builder.builderTab.builder = q.joinRemoved(jid) }
             }
             if !join.table.isEmpty {
                 ForEach($join.on) { $p in
+                    let pid = p.id
                     HStack(spacing: 8) {
                         Text("on").foregroundStyle(.secondary).frame(width: 34, alignment: .trailing).padding(.leading, 20)
                         builder.columnPicker(Binding(get: { BuilderTabView.tag(p.left) }, set: { if let r = BuilderTabView.ref($0) { p.left = r } }),
@@ -333,7 +341,7 @@ private struct JoinRow: View {
                         Text("=").foregroundStyle(.secondary)
                         builder.columnPicker(Binding(get: { BuilderTabView.tag(p.right) }, set: { if let r = BuilderTabView.ref($0) { p.right = r } }),
                                              groups: builder.groups(only: Set(q.sources.prefix { $0.id != join.id }.map(\.id))), width: 170)
-                        if join.on.count > 1 { builder.removeButton { join.on.removeAll { $0.id == p.id } } }
+                        if join.on.count > 1 { builder.removeButton { join.on.removeAll { $0.id == pid } } }
                     }
                 }
                 Button("+ match on another column") {
@@ -373,7 +381,8 @@ private struct CondRow: View {
     }
 
     private var row: some View {
-        HStack(spacing: 8) {
+        let id = cond.id
+        return HStack(spacing: 8) {
             builder.columnPicker(Binding(get: { BuilderTabView.tag(cond.ref) }, set: { if let r = BuilderTabView.ref($0) { cond.ref = r } }),
                                  groups: builder.groups(), width: 170)
             Picker("", selection: Binding(get: { cond.cond.op ?? "eq" }, set: { setOp($0) })) {
@@ -395,7 +404,7 @@ private struct CondRow: View {
                     .disabled(cond.ref.col.isEmpty)
                     .popover(isPresented: $picking, arrowEdge: .bottom) { pickPopover }
             }
-            builder.removeButton { builder.builderTab.builder.conds.removeAll { $0.id == cond.id } }
+            builder.removeButton { builder.builderTab.builder.conds.removeAll { $0.id == id } }
         }
     }
 
