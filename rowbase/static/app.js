@@ -281,7 +281,7 @@ function setHidden(t, set) { if (t.type === 'table') store.set(hiddenKey(t), [..
 
 function saveTabs() {
   store.set('tabs', App.tabs.map(t => ({id: t.id, type: t.type, conn: t.conn, table: t.table, where: t.where, order: t.order,
-    limit: t.limit, view: t.view, mode: t.mode, chain: t.chain, title: t.title, label: t.label, sql: t.sql, hidden: t.hidden,
+    limit: t.limit, view: t.view, mode: t.mode, chain: t.chain, title: t.title, label: t.label, sql: t.sql, hidden: t.hidden, q: t.q,
     ...(t.type === 'table' && t.filters?.conds.length ? {filters: t.filters, fwhere: t.fwhere} : {})})));
   store.set('activeTab', App.active);
 }
@@ -320,7 +320,7 @@ function closeTab(id) {
 }
 
 function tabTitle(t) {
-  if (t.type === 'console') return t.title;
+  if (t.type !== 'table') return t.title;
   let s = t.table;
   if (t.label) s += ' · ' + t.label;
   else if (t.where) s += ' · ' + (t.where.length > 40 ? t.where.slice(0, 38) + '…' : t.where);
@@ -330,7 +330,7 @@ function tabTitle(t) {
 
 function renderTabbar() {
   $('#tabbar').innerHTML = App.tabs.map(t => `<div class="tab${t.id === App.active ? ' on' : ''}" data-id="${t.id}" title="${esc(t.type === 'table' ? (t.table + (t.where ? '\nWHERE ' + t.where : '')) : t.title)}">
-      <span class="ic">${t.type === 'console' ? 'SQL' : '▦'}</span><span class="tt">${esc(tabTitle(t))}</span>${t.conn !== App.conn ? `<span class="ic">${esc([connOf(t.conn)?.name || '?', dbOf(t.conn)].filter(Boolean).join(' · '))}</span>` : ''}<button class="x" title="Close (middle click)">×</button></div>`).join('');
+      <span class="ic">${t.type === 'console' ? 'SQL' : t.type === 'builder' ? 'QB' : '▦'}</span><span class="tt">${esc(tabTitle(t))}</span>${t.conn !== App.conn ? `<span class="ic">${esc([connOf(t.conn)?.name || '?', dbOf(t.conn)].filter(Boolean).join(' · '))}</span>` : ''}<button class="x" title="Close (middle click)">×</button></div>`).join('');
   $('#tabbar .tab.on')?.scrollIntoView({block: 'nearest', inline: 'nearest'});
 }
 
@@ -373,7 +373,7 @@ function renderCrumbs(t) {
 // ------------------------------------------------------------------ panes
 
 function buildPane(t) {
-  const tpl = $(t.type === 'table' ? '#tplTable' : '#tplConsole').content.firstElementChild.cloneNode(true);
+  const tpl = $({table: '#tplTable', console: '#tplConsole', builder: '#tplBuilder'}[t.type]).content.firstElementChild.cloneNode(true);
   t.el = tpl;
   $('#panes').appendChild(tpl);
   renderCrumbs(t);
@@ -398,7 +398,7 @@ function buildPane(t) {
   $('.result', tpl).addEventListener('contextmenu', e => cellMenu(t, e));
   renderChips(t);
   updateColsBtn(t);
-  if (t.type === 'table') buildTablePane(t, tpl); else buildConsolePane(t, tpl);
+  if (t.type === 'table') buildTablePane(t, tpl); else if (t.type === 'builder') buildBuilderPane(t, tpl); else buildConsolePane(t, tpl);
 }
 
 function buildTablePane(t, el) {
@@ -411,6 +411,7 @@ function buildTablePane(t, el) {
   $('.next', el).onclick = () => { t.offset += t.limit; runTable(t); };
   $('.count', el).onclick = () => countRows(t);
   $('.tosql', el).onclick = () => openConsole(tableSql(t), {conn: t.conn});
+  $('.toqb', el).onclick = () => tableToBuilder(t);
   $$('.seg.view button', el).forEach(b => {
     b.classList.toggle('on', b.dataset.v === t.view);
     b.onclick = () => { t.view = b.dataset.v; applyView(t); saveTabs(); };
@@ -899,6 +900,237 @@ async function runConsoleFiltered(t) {
   await execute(t, sql, t.limit, 'console');
 }
 
+// ------------------------------------------------------------------ visual query builder (contract: rowbase/query.py)
+
+const AGGS = [['', '(value)'], ['count', 'count'], ['count_distinct', 'count distinct'], ['sum', 'sum'], ['avg', 'average'], ['min', 'min'], ['max', 'max']];
+const JOIN_TYPES = [['inner', 'only rows that match'], ['left', 'all rows of the tables above'], ['right', 'all rows of this table']];
+const SEP = '\t';
+function openBuilder(opts = {}) {
+  const conn = opts.conn || App.conn;
+  if (!connOf(conn)) { toast('Add a connection first'); return openManager(); }
+  if (!opts.conn && needsDatabase()) return toast('Choose a database first');
+  const n = App.tabs.filter(t => t.type === 'builder').length + 1;
+  const q = opts.q || {from: {id: 's0', table: opts.table || '', as: ''}, joins: [], columns: [], distinct: false, where: {match: 'all', conds: []}, orderBy: [], limit: 100};
+  return newTab({type: 'builder', conn, title: 'Query ' + n, q});
+}
+const qbSources = q => [q.from, ...q.joins].filter(s => s.table);
+const srcKey = s => s.as || s.table;
+function nextAlias(q, table) {
+  const base = (/[a-z]/i.exec(table.split('.').pop()) || ['t'])[0].toLowerCase(), used = new Set(qbSources(q).map(s => s.as));
+  for (let i = 1; ; i++) if (!used.has(i === 1 ? base : base + i)) return i === 1 ? base : base + i;
+}
+/** UI state → the shared spec: source ids become aliases (only when there are joins). */
+function specOut(q) {
+  const srcs = qbSources(q), multi = srcs.length > 1;
+  const key = id => (multi ? srcKey(srcs.find(s => s.id === id) || srcs[0]) : undefined);
+  const ref = c => { const o = {...c, src: key(c.src)}; if (o.src === undefined) delete o.src; return o; };
+  const src = s => (multi ? {table: s.table, as: s.as} : {table: s.table});
+  return {from: src(q.from), joins: q.joins.filter(j => j.table).map(j => ({type: j.type, ...src(j), on: j.on.map(p => ({left: ref(p.left), right: ref(p.right)}))})),
+    columns: q.columns.filter(c => c.col).map(ref), distinct: q.distinct, where: {match: q.where.match, conds: q.where.conds.filter(c => c.col).map(ref)},
+    orderBy: q.orderBy.filter(o => o.col).map(ref), limit: q.limit || null};
+}
+async function qbMetas(t) {
+  const srcs = qbSources(t.q);
+  const metas = await Promise.all(srcs.map(s => Schema.table(t.conn, s.table).catch(() => ({columns: []}))));
+  return {srcs, metas, multi: srcs.length > 1};
+}
+function colOpts(m, sel, {star = false, results = null} = {}) {
+  const cur = sel && sel.col ? sel.src + SEP + sel.col : '';
+  const o = (v, l, extra = '') => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}${extra}>${esc(l)}</option>`;
+  let h = `<option value="" disabled${cur ? '' : ' selected'}>column…</option>`;
+  if (star) h += o((m.srcs[0]?.id || 's0') + SEP + '*', 'all rows (*)');
+  if (results?.length) h += `<optgroup label="Results">${results.join('')}</optgroup>`;
+  return h + m.srcs.map((s, k) => `<optgroup label="${esc(s.table + (m.multi ? ` (${s.as})` : ''))}">${m.metas[k].columns.map(c => o(s.id + SEP + c.name, (m.multi ? s.as + '.' : '') + c.name)).join('')}</optgroup>`).join('');
+}
+const parseCol = v => { const i = v.indexOf(SEP); return {src: v.slice(0, i), col: v.slice(i + 1)}; };
+const opOpts = cur => FILTER_OPS.map(([g, ops]) => `<optgroup label="${g}">${ops.map(([k, l]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</optgroup>`).join('');
+
+async function qbRender(t) {
+  const q = t.q, el = t.el, tables = await Schema.loadTables(t.conn).catch(() => []), m = await qbMetas(t);
+  const tblOpts = (cur, list) => `<option value="" disabled${cur ? '' : ' selected'}>choose a table…</option>` + list.map(x => `<option${x.name === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  const related = new Set(m.metas.flatMap(x => [...x.columns.filter(c => c.fk).map(c => c.fk.table), ...(x.referencedBy || []).map(r => r.table)]));
+  const joinTables = cur => {
+    const rel = tables.filter(x => related.has(x.name));
+    return `<option value="" disabled${cur ? '' : ' selected'}>choose a table…</option>` + (rel.length ? `<optgroup label="Related (foreign keys)">${rel.map(x => `<option${x.name === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : '')
+      + `<optgroup label="All tables">${tables.map(x => `<option${x.name === cur && !related.has(cur) ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`;
+  };
+  const multi = m.multi, x = '<button class="ghost x" data-del title="Remove">×</button>';
+  $('.qb-from', el).innerHTML = `<div class="qr" data-k="from"><span class="qw">from</span><select class="qt">${tblOpts(q.from.table, tables)}</select>${multi ? `<span class="qa">as ${esc(q.from.as)}</span>` : ''}</div>`
+    + q.joins.map((j, i) => {
+      const jm = {srcs: m.srcs.filter(s => s.id === j.id), metas: m.metas.filter((_, k) => m.srcs[k].id === j.id), multi: true};
+      const prev = {srcs: m.srcs.filter(s => s.id !== j.id), metas: m.metas.filter((_, k) => m.srcs[k].id !== j.id), multi: true};
+      return `<div class="qr join" data-k="join" data-i="${i}"><span class="qw">join</span><select class="qt">${joinTables(j.table)}</select>${j.table ? `<span class="qa">as ${esc(j.as)}</span>` : ''}
+        <select class="qj" title="Which rows to keep">${JOIN_TYPES.map(([k, l]) => `<option value="${k}"${k === j.type ? ' selected' : ''}>${l}</option>`).join('')}</select>${x}
+        ${j.table ? `<div class="qon">${j.on.map((p, pi) => `<div class="qp" data-p="${pi}"><span class="qw">on</span><select class="ql">${colOpts(jm, p.left)}</select> = <select class="qr2">${colOpts(prev, p.right)}</select>${j.on.length > 1 ? '<button class="ghost x" data-delp title="Remove pair">×</button>' : ''}</div>`).join('')}<button class="ghost add sm" data-addp>+ match on another column</button></div>` : ''}</div>`;
+    }).join('');
+  const aggCols = q.columns.map((c, i) => [c, i]).filter(([c]) => c.agg && c.col);
+  $('.qb-cols', el).innerHTML = (q.columns.length ? '' : '<div class="qhint">All columns (*) — add columns to pick only some, or count / sum / average per group</div>')
+    + q.columns.map((c, i) => `<div class="qr" data-k="col" data-i="${i}"><select class="qagg" title="Value or summary">${AGGS.map(([k, l]) => `<option value="${k}"${k === (c.agg || '') ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <select class="qc">${colOpts(m, c, {star: c.agg === 'count'})}</select><input class="qas mono" placeholder="name in result (optional)" value="${esc(c.as || '')}">${x}</div>`).join('')
+    + (aggCols.length && q.columns.some(c => !c.agg) ? '<div class="qhint">Rows are grouped by the plain (value) columns.</div>' : '');
+  $('.qb-distinct', el).checked = !!q.distinct;
+  $('.qb-m', el).value = q.where.match;
+  $('.qb-match', el).hidden = q.where.conds.length < 2;
+  $('.qb-where', el).innerHTML = q.where.conds.map((c, i) => {
+    const a = OP_ARITY(c.op), v = a === 'n' ? (c.values || []).map(z => (z === null ? 'NULL' : z)).join(', ') : c.value ?? '';
+    return `<div class="qr" data-k="cond" data-i="${i}"><select class="qc">${colOpts(m, c)}</select><select class="qop">${opOpts(c.op)}</select>
+      ${a === 0 ? '' : `<span class="qv"><input class="qv1 mono" value="${esc(v)}" placeholder="${a === 'n' ? 'values, comma separated' : a === 2 ? 'from' : 'value'}"><button class="ghost pick" data-pick title="Pick from the values in the table">▾</button></span>`}
+      ${a === 2 ? `<span class="qw">and</span><input class="qv2 mono" value="${esc(c.value2 ?? '')}" placeholder="to">` : ''}${x}${OP_HINT[c.op] ? `<span class="qhint">${esc(OP_HINT[c.op])}</span>` : ''}</div>`;
+  }).join('');
+  const results = aggCols.map(([c, i]) => `<option value="agg${SEP}${i}">${esc(c.as || `${c.agg}(${c.col})`)}</option>`);
+  $('.qb-order', el).innerHTML = q.orderBy.map((o, i) => {
+    const ai = o.agg ? q.columns.findIndex(c => c.agg === o.agg && c.col === o.col && c.src === o.src) : -1;
+    const res = results.map((r, k) => (aggCols[k][1] === ai ? r.replace('<option ', '<option selected ') : r));
+    return `<div class="qr" data-k="order" data-i="${i}"><select class="qc">${colOpts(m, o.agg ? null : o, {results: res})}</select><select class="qdir"><option value="asc">A → Z, smallest first</option><option value="desc"${o.dir === 'desc' ? ' selected' : ''}>Z → A, largest first</option></select>${x}</div>`;
+  }).join('');
+  $('.qb-limit', el).value = q.limit || '';
+  $$('.add[data-add]', el).forEach(b => (b.disabled = !q.from.table));
+  qbPreview(t);
+}
+let qbTimer;
+function qbPreview(t) {
+  clearTimeout(qbTimer);
+  qbTimer = setTimeout(async () => {
+    const pre = $('.qb-sql pre', t.el), err = $('.qb-err', t.el);
+    if (!t.q.from.table) { pre.innerHTML = ''; err.textContent = ''; t.qsql = ''; return; }
+    try { t.qsql = (await api('/api/build', {conn: t.conn, query: specOut(t.q)})).sql; pre.innerHTML = highlightSql(t.qsql); err.textContent = ''; }
+    catch (e) { t.qsql = ''; err.textContent = e.message; }
+    saveTabsSoon();
+  }, 150);
+}
+async function qbJoinPairs(t, j) {
+  const jm = await Schema.table(t.conn, j.table).catch(() => ({columns: []}));
+  for (const s of qbSources(t.q).filter(s => s !== j)) {
+    const sm = await Schema.table(t.conn, s.table).catch(() => ({columns: []}));
+    const a = sm.columns.find(c => c.fk?.table === j.table), b = jm.columns.find(c => c.fk?.table === s.table);
+    if (a) return [{left: {src: j.id, col: a.fk.column}, right: {src: s.id, col: a.name}}];
+    if (b) return [{left: {src: j.id, col: b.name}, right: {src: s.id, col: b.fk.column}}];
+  }
+  return [{left: {src: j.id, col: ''}, right: {src: t.q.from.id, col: ''}}];
+}
+function buildBuilderPane(t, el) {
+  const q = t.q, item = e => { const r = e.target.closest('.qr'); return r && {k: r.dataset.k, i: +r.dataset.i, r}; };
+  el.addEventListener('change', async e => {
+    const it = item(e), tg = e.target;
+    if (tg.matches('.qb-distinct')) { q.distinct = tg.checked; return qbPreview(t); }
+    if (tg.matches('.qb-m')) { q.where.match = tg.value; return qbPreview(t); }
+    if (tg.matches('.qb-limit')) { q.limit = +tg.value || null; return qbPreview(t); }
+    if (!it) return;
+    if (it.k === 'from' && tg.matches('.qt')) {
+      if (q.from.table && !confirm('Start over with another table? Joins, columns and conditions are cleared.')) return qbRender(t);
+      Object.assign(q, {from: {id: 's0', table: tg.value, as: ''}, joins: [], columns: [], where: {match: q.where.match, conds: []}, orderBy: []});
+    } else if (it.k === 'join') {
+      const j = q.joins[it.i];
+      if (tg.matches('.qt')) { j.table = tg.value; j.as = nextAlias({...q, joins: q.joins.filter(x => x !== j)}, j.table); j.on = await qbJoinPairs(t, j); }
+      else if (tg.matches('.qj')) j.type = tg.value;
+      else if (tg.matches('.ql, .qr2')) { const p = j.on[+tg.closest('[data-p]').dataset.p]; p[tg.matches('.ql') ? 'left' : 'right'] = parseCol(tg.value); }
+    } else if (it.k === 'col') {
+      const c = q.columns[it.i];
+      if (tg.matches('.qagg')) { c.agg = tg.value; if (c.col === '*' && c.agg !== 'count') c.col = ''; }
+      else if (tg.matches('.qc')) Object.assign(c, parseCol(tg.value));
+      else if (tg.matches('.qas')) { c.as = tg.value.trim(); return qbPreview(t); }
+    } else if (it.k === 'cond') {
+      const c = q.where.conds[it.i];
+      if (tg.matches('.qc')) Object.assign(c, parseCol(tg.value));
+      else if (tg.matches('.qop')) {
+        const was = OP_ARITY(c.op); c.op = tg.value;
+        if (was === 'n' && OP_ARITY(c.op) !== 'n') c.value = (c.values || [])[0] ?? ''; else if (was !== 'n' && OP_ARITY(c.op) === 'n') c.values = c.value ? [c.value] : [];
+      } else return qbInput(t, it, tg);
+    } else if (it.k === 'order') {
+      const o = q.orderBy[it.i];
+      if (tg.matches('.qdir')) o.dir = tg.value;
+      else if (tg.value.startsWith('agg' + SEP)) { const c = q.columns[+tg.value.split(SEP)[1]]; Object.assign(o, {src: c.src, col: c.col, agg: c.agg}); }
+      else { Object.assign(o, parseCol(tg.value)); delete o.agg; }
+    }
+    qbRender(t);
+  });
+  el.addEventListener('input', e => { const it = item(e); if (it?.k === 'cond' && e.target.matches('.qv1, .qv2')) qbInput(t, it, e.target); else if (it?.k === 'col' && e.target.matches('.qas')) { t.q.columns[it.i].as = e.target.value.trim(); qbPreview(t); } });
+  el.addEventListener('click', async e => {
+    const add = e.target.closest('[data-add]')?.dataset.add, it = item(e);
+    const first = qbSources(q)[0];
+    if (add) {
+      if (!q.from.table) return toast('Choose a table first');
+      if (add === 'join') {
+        if (!q.from.as) q.from.as = nextAlias({...q, from: {}}, q.from.table);
+        q.joins.push({id: 's' + Date.now().toString(36), type: 'left', table: '', as: '', on: []});
+      } else if (add === 'col') q.columns.push({src: first.id, col: '', agg: ''});
+      else if (add === 'agg') q.columns.push({src: first.id, col: '*', agg: 'count', as: q.columns.some(c => c.as === 'count') ? '' : 'count'});
+      else if (add === 'cond') q.where.conds.push({src: first.id, col: '', op: 'eq', value: ''});
+      else if (add === 'order') q.orderBy.push({src: first.id, col: '', dir: 'asc'});
+      return qbRender(t);
+    }
+    if (e.target.closest('[data-addp]')) { const j = q.joins[it.i]; j.on.push({left: {src: j.id, col: ''}, right: {src: q.from.id, col: ''}}); return qbRender(t); }
+    if (e.target.closest('[data-delp]')) { q.joins[it.i].on.splice(+e.target.closest('[data-p]').dataset.p, 1); return qbRender(t); }
+    if (e.target.closest('[data-del]') && it) {
+      if (it.k === 'join') {
+        const id = q.joins[it.i].id, keep = c => c.src !== id;
+        q.joins.splice(it.i, 1);
+        q.columns = q.columns.filter(keep); q.where.conds = q.where.conds.filter(keep); q.orderBy = q.orderBy.filter(keep);
+        q.joins.forEach(j => (j.on = j.on.filter(p => p.right.src !== id)));
+        if (!q.joins.length) q.from.as = '';
+      } else ({col: q.columns, cond: q.where.conds, order: q.orderBy})[it.k].splice(it.i, 1);
+      return qbRender(t);
+    }
+    if (e.target.closest('[data-pick]') && it?.k === 'cond') return qbPick(t, q.where.conds[it.i], e.target.closest('[data-pick]'));
+  });
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); qbRun(t); } });
+  $('.run', el).onclick = () => qbRun(t);
+  $('.qb-tosql', el).onclick = () => (t.qsql ? openConsole(t.qsql, {conn: t.conn}) : toast('Choose a table first'));
+  $('.qb-copy', el).onclick = () => (t.qsql ? copyText(t.qsql, 'SQL') : toast('Choose a table first'));
+  qbRender(t);
+}
+function qbInput(t, it, tg) {
+  const c = t.q.where.conds[it.i];
+  if (tg.matches('.qv2')) c.value2 = tg.value;
+  else if (OP_ARITY(c.op) === 'n') c.values = tg.value.split(',').map(s => s.trim()).filter(s => s !== '').map(s => (s === 'NULL' ? null : s));
+  else c.value = tg.value;
+  qbPreview(t);
+}
+/** Values list for a builder condition (search, counts); multi-select for "is one of". */
+async function qbPick(t, c, anchor) {
+  if (!c.col) return toast('Choose a column first');
+  const s = qbSources(t.q).find(x => x.id === c.src) || t.q.from, multi = OP_ARITY(c.op) === 'n';
+  closePops();
+  const p = document.createElement('div');
+  p.className = 'pop fpop';
+  p.innerHTML = `<div class="fh"><b>${esc(c.col)}</b><small>${esc(s.table)}</small></div><input class="fs" placeholder="Search values"><div class="fl2"></div><div class="fnote"></div>`
+    + (multi ? '<div class="ff"><span class="spacer"></span><button class="primary" data-a="ok">Done</button></div>' : '');
+  const list = $('.fl2', p), sel = new Set(c.values || []);
+  let items = [];
+  const load = async () => {
+    $('.fnote', p).textContent = 'Loading…';
+    try {
+      const r = await api('/api/values', {conn: t.conn, table: s.table, column: c.col, search: $('.fs', p).value.trim(), limit: 300});
+      items = r.values; $('.fnote', p).textContent = r.truncated ? 'Top 300 values — search to narrow' : '';
+    } catch (e) { items = []; $('.fnote', p).textContent = e.message; }
+    list.innerHTML = items.map(([v, n], k) => `<label data-k="${k}">${multi ? `<input type="checkbox"${sel.has(v) ? ' checked' : ''}>` : ''}<span class="${v === null || v === '' ? 'null' : ''}">${esc(v === null ? 'NULL' : v === '' ? '(empty)' : v)}</span><i>${fmtN(n)}</i></label>`).join('') || '<div class="empty">No values</div>';
+  };
+  let timer;
+  $('.fs', p).oninput = () => { clearTimeout(timer); timer = setTimeout(load, 250); };
+  list.onclick = e => {
+    const lb = e.target.closest('label[data-k]');
+    if (!lb) return;
+    const v = items[+lb.dataset.k][0];
+    if (!multi) { c.value = v === null ? '' : String(v); if (v === null) c.op = 'null'; p.remove(); return qbRender(t); }
+    if (e.target.matches('input')) { if (e.target.checked) sel.add(v); else sel.delete(v); }
+  };
+  p.onclick = e => { if (e.target.dataset.a === 'ok') { c.values = [...sel]; p.remove(); qbRender(t); } };
+  placePop(p, anchor);
+  $('.fs', p).focus();
+  load();
+}
+async function qbRun(t) {
+  if (!t.q.from.table) return toast('Choose a table first');
+  try { t.qsql = (await api('/api/build', {conn: t.conn, query: specOut(t.q)})).sql; } catch (e) { return toast(e.message); }
+  await execute(t, t.qsql, Math.min(t.q.limit || 5000, 5000), 'builder');
+}
+/** Table tab → builder with the same table and column filters. */
+function tableToBuilder(t) {
+  if (t.where) toast('The raw WHERE text is not carried over — only column filters', true);
+  openBuilder({conn: t.conn, q: {from: {id: 's0', table: t.table, as: ''}, joins: [], columns: [], distinct: false,
+    where: {match: t.filters?.match || 'all', conds: (t.filters?.conds || []).map(c => ({...c, src: 's0'}))}, orderBy: [], limit: t.limit}});
+}
+
 // ------------------------------------------------------------------ foreign keys
 
 const crumbOf = (t, via) => ({tabId: t.id, table: t.type === 'table' ? t.table : null, where: t.where, title: tabTitle(t), via});
@@ -1209,7 +1441,7 @@ function renderConnBadge() {
 function renderWelcome() {
   const w = $('#welcome');
   w.classList.add('welcome');
-  w.innerHTML = App.conns.length ? 'Pick a table on the left or open a SQL console (+ SQL).'
+  w.innerHTML = App.conns.length ? 'Pick a table on the left, build a query visually (+ Query builder) or write SQL (+ SQL).'
     : '<h2>Welcome to Row<span>base</span></h2><p>A small local client for MySQL, PostgreSQL and SQLite.<br>Add a connection to get started.</p><button class="primary" data-add>Add your first connection</button>';
 }
 async function switchConn(id) {
@@ -1435,6 +1667,7 @@ $('#cmTest').onclick = async () => {
 };
 $('#tableList').onclick = e => { const t = e.target.closest('[data-t]'); if (t) openTable(t.dataset.t); };
 $('#newConsole').onclick = () => openConsole();
+$('#newBuilder').onclick = () => openBuilder();
 $('#historyBtn').onclick = openHistory;
 $('#histClose').onclick = () => closeDrawer('#histDrawer');
 $('#histFilter').oninput = renderHistory;

@@ -220,3 +220,27 @@ table.grid th .fb.on{opacity:1;color:#fff;background:var(--accent)}
 .fpop .ff{display:flex;gap:6px;align-items:center}
 .pop.cmenu{min-width:200px}.pop.cmenu .mh{cursor:default;color:var(--muted);font-size:11px;font-family:var(--mono)}.pop.cmenu .mh:hover{background:none}
 .pop.cmenu div b{font-weight:500;font-family:var(--mono);font-size:12px}
+/* visual query builder */
+.qb{flex:0 1 auto;max-height:58%;overflow:auto;padding:10px 14px 4px;display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:10px}
+.qb section{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px 10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}
+.qb h4{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;gap:12px;align-items:center;width:100%}
+.qb h4 .chk,.qb h4 .qb-match{text-transform:none;letter-spacing:0;font-weight:400;display:flex;gap:4px;align-items:center;margin-left:auto}
+.qb .qr{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%}
+.qb .qr select,.qb .qr input{min-width:0;max-width:100%;padding:3px 6px}
+.qb .qr .qc,.qb .qr .qt{flex:1 1 160px}
+.qb .qr .qas{flex:1 1 120px}.qb .qr .qdir{flex:0 1 auto}
+.qb .qv{display:flex;flex:1 1 160px;min-width:0}.qb .qv input{flex:1;border-top-right-radius:0;border-bottom-right-radius:0}
+.qb .qv .pick{border:1px solid var(--line);border-left:0;border-radius:0 6px 6px 0;padding:3px 7px}
+.qb .qv2{flex:1 1 100px}
+.qb .qw{color:var(--kw);font-family:var(--mono);font-size:11px;font-weight:600}
+.qb .qa{color:var(--muted);font-family:var(--mono);font-size:12px}
+.qb .join{border-top:1px dashed var(--line);padding-top:6px}
+.qb .qon{width:100%;display:flex;flex-direction:column;gap:4px;padding-left:18px}
+.qb .qp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.qb .qp select{flex:1 1 140px}
+.qb .x{padding:0 6px;color:var(--muted)}.qb .x:hover{color:var(--danger)}
+.qb .add{color:var(--accent);padding:2px 6px}.qb .add.sm{font-size:12px;align-self:flex-start}
+.qb .qhint{color:var(--muted);font-size:11px;width:100%}
+.qb .qb-lim{color:var(--muted);font-size:12px;display:flex;gap:6px;align-items:center}.qb .qb-limit{width:90px}
+.qb-sql{grid-column:1/-1;border:1px solid var(--line);border-radius:8px;background:var(--panel2)}
+.qb-sql pre{margin:0;padding:8px 12px;white-space:pre-wrap;font-size:12px;line-height:1.5}.qb-sql pre:empty{display:none}
+.qb-err{color:var(--danger);font-size:12px;padding:0 12px 6px}.qb-err:empty{display:none}
