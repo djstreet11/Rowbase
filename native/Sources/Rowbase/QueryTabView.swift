@@ -108,6 +108,12 @@ struct VerticalSplit<T: View, B: View>: NSViewRepresentable {
         return sv
     }
 
+    /// Fill the offered space: without this SwiftUI asks for `fittingSize`, which runs Auto Layout over the whole split
+    /// subtree (both hosted panes + grid) on every update — most of the builder's per-keystroke cost.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSplitView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 600, height: proposal.height ?? 400)
+    }
+
     func updateNSView(_ sv: NSSplitView, context: Context) {
         context.coordinator.t?.rootView = top
         context.coordinator.b?.rootView = bottom

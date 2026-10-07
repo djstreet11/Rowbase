@@ -661,6 +661,28 @@ final class AppState {
             while t.result == nil && t.error == nil && waited < 40 { try? await Task.sleep(for: .milliseconds(250)); waited += 1 }
         }
         guard let b = openBuilder(from: activeTab?.isQuery == false ? activeTab : nil) else { return }
+        if mode == "bench", let t = tables.first?.name, let info = try? await tableInfo(for: b.connection, table: t) {
+            // wide table: 4 columns, 3 conditions, 1 sort, then N edits (typing into a condition) with a synchronous redraw each
+            let cols = info.columns.map(\.name)
+            var q = QBModel()
+            q.from.table = t
+            q.columns = cols.prefix(4).map { QBColumn(ref: QBRef(src: "s0", col: $0)) }
+            q.conds = cols.dropFirst(4).prefix(3).map { QBCond(ref: QBRef(src: "s0", col: $0), cond: FilterCond(op: "contains", value: "a")) }
+            q.order = [QBOrder(ref: QBRef(src: "s0", col: cols[0]))]
+            b.builder = q
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard let w = NSApp.windows.first(where: { $0.canBecomeMain }), let cv = w.contentView else { return }
+            let n = Int(env("ROWBASE_SNAPSHOT_BENCH_N") ?? "") ?? 20
+            let t0 = Date()
+            for i in 0..<n {
+                b.builder.conds[0].cond.value = String(repeating: "a", count: i + 2)
+                cv.layoutSubtreeIfNeeded()
+                w.displayIfNeeded()
+            }
+            print(String(format: "ROWBASE_BENCH edits=%d per_edit=%.1fms", n, Date().timeIntervalSince(t0) * 1000 / Double(n)))
+            fflush(stdout)
+            return
+        }
         if mode == "demo" {
             var q = QBModel()
             q.from.table = "orders"

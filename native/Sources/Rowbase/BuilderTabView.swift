@@ -61,7 +61,8 @@ struct BuilderTabView: View {
 
     // MARK: SQL preview
 
-    private var sql: (text: String?, error: String?) {
+    private var sql: (text: String?, error: String?) { Self.sqlCache.get(q, "\(tab.connection.id)|\(tab.connection.database ?? "")|\(infos.count)", tab.connection.dialect) { computeSQL() } }
+    private func computeSQL() -> (text: String?, error: String?) {
         guard !q.from.table.isEmpty else { return (nil, nil) }
         do { return (try QueryBuilder.selectSQL(tab.connection.dialect, q.spec, types: q.types(infos)), nil) }
         catch { return (nil, error.localizedDescription) }
@@ -88,10 +89,27 @@ struct BuilderTabView: View {
         .background(Color(nsColor: .textBackgroundColor))
     }
 
+    /// The SQL text is read by the toolbar and the preview on every render: compute (and highlight) once per model change.
+    @MainActor final class SQLCache {
+        var key: (QBModel, String, Dialect)?
+        var value: (text: String?, error: String?) = (nil, nil)
+        var hl: (String, NSAttributedString)?
+        func get(_ q: QBModel, _ n: String, _ d: Dialect, _ make: () -> (text: String?, error: String?)) -> (text: String?, error: String?) {
+            if let k = key, k.0 == q, k.1 == n, k.2 == d { return value }
+            key = (q, n, d)
+            value = make()
+            return value
+        }
+    }
+    @MainActor static let sqlCache = SQLCache()
+
     @MainActor static func highlight(_ sql: String, _ d: Dialect) -> NSAttributedString {
+        if let h = sqlCache.hl, h.0 == sql { return h.1 }
         let st = NSTextStorage(string: sql)
         SQLHighlighter.apply(to: st, dialect: d)
-        return NSAttributedString(attributedString: st)
+        let out = NSAttributedString(attributedString: st)
+        sqlCache.hl = (sql, out)
+        return out
     }
 
     // MARK: form
@@ -178,14 +196,12 @@ struct BuilderTabView: View {
     private var fromRow: some View {
         HStack(spacing: 8) {
             Text("from").foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
-            Picker("", selection: Binding(get: { q.from.table }, set: { t in
+            PopUpPicker(groups: [("", tables.map { Option(tag: $0.name, label: $0.name) })], selection: q.from.table,
+                        placeholder: "Choose a table…") { t in
                 if q.from.table.isEmpty || (q.joins.isEmpty && q.columns.isEmpty && q.conds.isEmpty && q.order.isEmpty) { resetFrom(t) }
                 else if t != q.from.table { pendingFrom = t }
-            })) {
-                if q.from.table.isEmpty { Text("Choose a table…").tag("") }
-                ForEach(tables) { Text($0.name).tag($0.name) }
             }
-            .labelsHidden().fixedSize()
+            .fixedSize()
             if q.multi { Text("as \(q.from.alias)").foregroundStyle(.secondary).font(.system(size: 12, design: .monospaced)) }
         }
     }
@@ -219,14 +235,8 @@ struct BuilderTabView: View {
 
     func columnPicker(_ sel: Binding<String>, groups: [(title: String, options: [Option])], extra: [Option] = [], extraTitle: String = "",
                       width: CGFloat = 200) -> some View {
-        Picker("", selection: sel) {
-            if sel.wrappedValue.isEmpty { Text("column…").tag("") }
-            if !extra.isEmpty { Section(extraTitle) { ForEach(extra, id: \.self) { Text($0.label).tag($0.tag) } } }
-            ForEach(groups, id: \.title) { g in
-                Section(g.title) { ForEach(g.options, id: \.self) { Text($0.label).tag($0.tag) } }
-            }
-        }
-        .labelsHidden().fixedSize()
+        PopUpPicker(groups: (extra.isEmpty ? [] : [(extraTitle, extra)]) + groups, selection: sel.wrappedValue) { sel.wrappedValue = $0 }
+            .fixedSize()
     }
 
     // MARK: rows
@@ -235,11 +245,11 @@ struct BuilderTabView: View {
         let star = c.wrappedValue.agg == "count"
         let id = c.wrappedValue.id
         return HStack(spacing: 8) {
-            Picker("", selection: Binding(get: { c.wrappedValue.agg }, set: { a in
+            PopUpPicker(groups: [("", QBModel.aggs.map { Option(tag: $0.key, label: $0.label) })], selection: c.wrappedValue.agg) { a in
                 c.wrappedValue.agg = a
                 if c.wrappedValue.ref.col == "*" && a != "count" { c.wrappedValue.ref.col = "" }
-            })) { ForEach(QBModel.aggs, id: \.key) { Text($0.label).tag($0.key) } }
-            .labelsHidden().fixedSize().help("Value, or a summary per group")
+            }
+            .fixedSize().help("Value, or a summary per group")
             Text("of").foregroundStyle(.secondary).opacity(c.wrappedValue.agg.isEmpty ? 0 : 1)
             columnPicker(Binding(get: { Self.tag(c.wrappedValue.ref) }, set: { if let r = Self.ref($0) { c.wrappedValue.ref = r } }),
                          groups: groups(), extra: star ? [Option(tag: q.firstID + "\t*", label: "all rows (*)")] : [], extraTitle: "Rows")
@@ -265,11 +275,9 @@ struct BuilderTabView: View {
                     o.wrappedValue.agg = q.columns[i].agg
                 } else if let r = Self.ref(t) { o.wrappedValue.ref = r; o.wrappedValue.agg = "" }
             }), groups: groups(), extra: results, extraTitle: "Results")
-            Picker("", selection: o.desc) {
-                Text("A → Z, smallest first").tag(false)
-                Text("Z → A, largest first").tag(true)
-            }
-            .labelsHidden().fixedSize()
+            PopUpPicker(groups: [("", [Option(tag: "asc", label: "A → Z, smallest first"), Option(tag: "desc", label: "Z → A, largest first")])],
+                        selection: o.wrappedValue.desc ? "desc" : "asc") { o.wrappedValue.desc = $0 == "desc" }
+                .fixedSize()
             removeButton { tab.builder.order.removeAll { $0.id == id } }
         }
     }
@@ -319,16 +327,14 @@ private struct JoinRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("join").foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
-                Picker("", selection: Binding(get: { join.table }, set: { t in pick(t) })) {
-                    if join.table.isEmpty { Text("Choose a table…").tag("") }
-                    let r = builder.allTables.filter { rel.contains($0.name) }
-                    if !r.isEmpty { Section("Related (foreign keys)") { ForEach(r) { Text($0.name).tag($0.name) } } }
-                    Section("All tables") { ForEach(builder.allTables.filter { !rel.contains($0.name) }) { Text($0.name).tag($0.name) } }
-                }
-                .labelsHidden().fixedSize()
+                PopUpPicker(groups: [("Related (foreign keys)", builder.allTables.filter { rel.contains($0.name) }.map { .init(tag: $0.name, label: $0.name) }),
+                                     ("All tables", builder.allTables.filter { !rel.contains($0.name) }.map { .init(tag: $0.name, label: $0.name) })],
+                            selection: join.table, placeholder: "Choose a table…") { t in pick(t) }
+                    .fixedSize()
                 if !join.table.isEmpty { Text("as \(join.alias)").foregroundStyle(.secondary).font(.system(size: 12, design: .monospaced)) }
-                Picker("", selection: $join.type) { ForEach(QBModel.joinTypes, id: \.key) { Text($0.label).tag($0.key) } }
-                    .labelsHidden().fixedSize().help("Which rows to keep")
+                PopUpPicker(groups: [("", QBModel.joinTypes.map { BuilderTabView.Option(tag: $0.key, label: $0.label) })],
+                            selection: join.type) { join.type = $0 }
+                    .fixedSize().help("Which rows to keep")
                 builder.removeButton { builder.builderTab.builder = q.joinRemoved(jid) }
             }
             if !join.table.isEmpty {
@@ -385,12 +391,8 @@ private struct CondRow: View {
         return HStack(spacing: 8) {
             builder.columnPicker(Binding(get: { BuilderTabView.tag(cond.ref) }, set: { if let r = BuilderTabView.ref($0) { cond.ref = r } }),
                                  groups: builder.groups(), width: 170)
-            Picker("", selection: Binding(get: { cond.cond.op ?? "eq" }, set: { setOp($0) })) {
-                ForEach(FilterOps.groups, id: \.title) { g in
-                    Section(g.title) { ForEach(g.ops, id: \.self) { Text(FilterOps.label($0)).tag($0) } }
-                }
-            }
-            .labelsHidden().fixedSize()
+            PopUpPicker(groups: Self.opGroups, selection: cond.cond.op ?? "eq") { setOp($0) }
+                .fixedSize()
             if arity != 0 {
                 TextField(arity == -1 ? "values, comma separated" : arity == 2 ? "from" : "value", text: valueText)
                     .font(.system(size: 12, design: .monospaced)).textFieldStyle(.roundedBorder).frame(width: 160)
@@ -406,6 +408,10 @@ private struct CondRow: View {
             }
             builder.removeButton { builder.builderTab.builder.conds.removeAll { $0.id == id } }
         }
+    }
+
+    static let opGroups: [PopUpPicker.Group] = FilterOps.groups.map { g in
+        (g.title, g.ops.map { BuilderTabView.Option(tag: $0, label: FilterOps.label($0)) })
     }
 
     private var valueText: Binding<String> {
@@ -437,5 +443,76 @@ private struct CondRow: View {
                                  validate: { c in _ = try QueryBuilder.filterWhere(conn.dialect, FilterGroup(match: "all", conds: [c])) }),
             initial: cond.cond, showClear: false,
             onApply: { c in if var c { c.col = nil; cond.cond = c } }, onClose: { picking = false })
+    }
+}
+
+/// NSPopUpButton picker whose menu is rebuilt only when the options change. A SwiftUI `Picker` re-diffs every item of
+/// every menu on each model edit — with wide tables (70+ columns × 8 rows) that cost ~300 ms per keystroke.
+struct PopUpPicker: NSViewRepresentable {
+    typealias Group = (title: String, options: [BuilderTabView.Option])
+    let groups: [Group]
+    let selection: String
+    var placeholder = "column…"
+    let onChange: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let b = NSPopUpButton(frame: .zero, pullsDown: false)
+        b.controlSize = .small
+        b.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        b.target = context.coordinator
+        b.action = #selector(Coordinator.picked(_:))
+        b.menu?.autoenablesItems = false
+        return b
+    }
+
+    func updateNSView(_ b: NSPopUpButton, context: Context) {
+        let c = context.coordinator
+        c.onChange = onChange
+        var h = Hasher()
+        for g in groups { h.combine(g.title); h.combine(g.options) }
+        h.combine(selection.isEmpty)
+        let sig = h.finalize()
+        if sig != c.signature {
+            let m = NSMenu()
+            m.autoenablesItems = false
+            if selection.isEmpty { let p = NSMenuItem(title: placeholder, action: nil, keyEquivalent: ""); p.isEnabled = false; m.addItem(p) }
+            for g in groups where !g.options.isEmpty {
+                if !g.title.isEmpty { m.addItem(.sectionHeader(title: g.title)) }
+                for o in g.options {
+                    let it = NSMenuItem(title: o.label, action: nil, keyEquivalent: "")
+                    it.representedObject = o.tag
+                    m.addItem(it)
+                }
+            }
+            b.menu = m
+        }
+        if sig != c.signature || selection != c.selection {
+            if let i = b.menu?.items.firstIndex(where: { ($0.representedObject as? String) == selection }) { b.selectItem(at: i) }
+            else if selection.isEmpty { b.selectItem(at: 0) }
+            c.selection = selection
+            c.size = nil
+        }
+        c.signature = sig
+    }
+
+    /// intrinsicContentSize measures every menu item: cache it until the menu or the selection changes.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView b: NSPopUpButton, context: Context) -> CGSize? {
+        if let s = context.coordinator.size { return s }
+        let s = b.intrinsicContentSize
+        let out = CGSize(width: min(max(s.width, 60), 320), height: s.height)
+        context.coordinator.size = out
+        return out
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var signature: Int?
+        var selection: String?
+        var size: CGSize?
+        var onChange: ((String) -> Void)?
+        @objc func picked(_ b: NSPopUpButton) {
+            if let t = b.selectedItem?.representedObject as? String { onChange?(t) }
+        }
     }
 }

@@ -40,7 +40,7 @@ private struct TabItem: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: tab.isBuilder ? "square.grid.3x1.below.line.grid.1x2" : tab.isQuery ? "terminal" : "tablecells")
+            Image(systemName: tab.isBuilder ? "hammer" : tab.isQuery ? "terminal" : "tablecells")
                 .font(.system(size: 11)).foregroundStyle(active ? Color.accentColor : Color.secondary)
             Text(tab.title).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
                 .foregroundStyle(active ? Color.primary : Color.secondary)

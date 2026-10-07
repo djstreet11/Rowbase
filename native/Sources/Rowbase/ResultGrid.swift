@@ -273,12 +273,22 @@ final class GridHeaderInfo: NSObject {
     init(name: String, typeText: String, numeric: Bool, dim: Bool, filterable: Bool = false, filtered: Bool = false) {
         (self.name, self.typeText, self.numeric, self.dim, self.filterable, self.filtered) = (name, typeText, numeric, dim, filterable, filtered)
     }
-    static let filterWidth: CGFloat = 18
-    static func filterIcon(_ on: Bool) -> NSImage? {
-        let cfg = NSImage.SymbolConfiguration(pointSize: 11, weight: on ? .semibold : .regular)
-            .applying(.init(paletteColors: [on ? .controlAccentColor : .tertiaryLabelColor]))
-        return NSImage(systemSymbolName: on ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-                       accessibilityDescription: "Filter")?.withSymbolConfiguration(cfg)
+    static let filterWidth: CGFloat = 22
+
+    /// Funnel glyph (same shape as the web UI's), 12×12 centred in `r` of a flipped view: outline when idle, accent fill when active.
+    static func drawFunnel(in r: NSRect, active: Bool) {
+        let s: CGFloat = 12 / 16, ox = r.midX - 6, oy = r.midY - 6
+        func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: ox + x * s, y: oy + y * s) }
+        let path = NSBezierPath()
+        path.move(to: p(1.5, 2)); path.line(to: p(14.5, 2)); path.line(to: p(9.5, 8.2)); path.line(to: p(9.5, 13))
+        path.line(to: p(6.5, 14.5)); path.line(to: p(6.5, 8.2)); path.close()
+        path.lineJoinStyle = .round
+        if active {
+            NSColor.controlAccentColor.setFill(); path.fill()
+        } else {
+            path.lineWidth = 1.2
+            NSColor.secondaryLabelColor.setStroke(); path.stroke()
+        }
     }
 }
 
@@ -290,7 +300,7 @@ final class GridHeaderView: NSTableHeaderView {
         guard let tv = tableView, c >= 0, c < tv.tableColumns.count,
               (tv.tableColumns[c].headerCell.representedObject as? GridHeaderInfo)?.filterable == true else { return nil }
         let r = headerRect(ofColumn: c)
-        return NSRect(x: r.maxX - GridHeaderInfo.filterWidth - 2, y: r.minY, width: GridHeaderInfo.filterWidth, height: r.height)
+        return NSRect(x: r.maxX - GridHeaderInfo.filterWidth - 4, y: r.minY, width: GridHeaderInfo.filterWidth + 4, height: r.height)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -326,10 +336,8 @@ final class GridHeaderCell: NSTableHeaderCell {
         n.draw(in: NSRect(x: x, y: y, width: w, height: nh))
         y += nh
         if th > 0 { t.draw(in: NSRect(x: x, y: y, width: w, height: th)) }
-        if i.filterable, let img = GridHeaderInfo.filterIcon(i.filtered) {
-            let s = img.size
-            img.draw(in: NSRect(x: f.maxX - fw + (fw - s.width) / 2 - 3, y: f.minY + (f.height - s.height) / 2, width: s.width, height: s.height),
-                     from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        if i.filterable {
+            GridHeaderInfo.drawFunnel(in: NSRect(x: f.maxX - fw - 2, y: f.minY, width: fw, height: f.height), active: i.filtered)
         }
     }
 }
